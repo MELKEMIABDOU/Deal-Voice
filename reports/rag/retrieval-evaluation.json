@@ -1,0 +1,89 @@
+{
+  "top_k": 5,
+  "question_count": 4,
+  "source_recall_at_k": 0.75,
+  "mean_fact_recall": 0.6458333333333334,
+  "results": [
+    {
+      "question_id": "b2b-001",
+      "expected_source": "B2B Appel.mp3",
+      "retrieved_sources": [
+        "Réunion en français Lerian Nti.mp3",
+        "Réunion en français Lerian Nti.mp3",
+        "Réunion en français Lerian Nti.mp3",
+        "Réunion en français Lerian Nti.mp3",
+        "Réunion en français Lerian Nti.mp3"
+      ],
+      "source_hit": false,
+      "expected_facts_found": [
+        "proposition"
+      ],
+      "expected_facts_missing": [
+        "fontaines à eau",
+        "bouteilles"
+      ],
+      "fact_recall": 0.3333333333333333
+    },
+    {
+      "question_id": "b2b-002",
+      "expected_source": "B2B Appel.mp3",
+      "retrieved_sources": [
+        "Réunion en français Lerian Nti.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "Réunion en français Lerian Nti.mp3",
+        "Réunion en français Lerian Nti.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "mardi",
+        "14",
+        "17 heures"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0
+    },
+    {
+      "question_id": "reunion-001",
+      "expected_source": "Reunion dequipe.mp3",
+      "retrieved_sources": [
+        "Reunion dequipe.mp3",
+        "Réunion en français Lerian Nti.mp3",
+        "Réunion en français Lerian Nti.mp3",
+        "Réunion en français Lerian Nti.mp3",
+        "Réunion en français Lerian Nti.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "paquet",
+        "insectes",
+        "indemnisé"
+      ],
+      "expected_facts_missing": [
+        "gâteaux"
+      ],
+      "fact_recall": 0.75
+    },
+    {
+      "question_id": "reunion-002",
+      "expected_source": "Reunion dequipe.mp3",
+      "retrieved_sources": [
+        "Reunion dequipe.mp3",
+        "Réunion en français Lerian Nti.mp3",
+        "Réunion en français Lerian Nti.mp3",
+        "Réunion en français Lerian Nti.mp3",
+        "Réunion en français Lerian Nti.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "insectes",
+        "magasin"
+      ],
+      "expected_facts_missing": [
+        "gâteaux",
+        "infectés"
+      ],
+      "fact_recall": 0.5
+    }
+  ]
+}

@@ -1,0 +1,250 @@
+{
+  "model": "qwen3:8b",
+  "top_k": 3,
+  "question_count": 10,
+  "source_accuracy": 1.0,
+  "mean_fact_recall": 0.8333333333333334,
+  "language_compliance": 1.0,
+  "pass_rate": 0.7,
+  "results": [
+    {
+      "question_id": "b2b-001",
+      "question": "Quel est l'objectif principal de l'appel commercial ?",
+      "answer": "L'objectif principal de l'appel commercial est de promouvoir le système de fontaines comme alternative aux bouteilles individuelles, afin de réduire les coûts et les déchets liés à l'eau distribuée dans l'entreprise. Le responsable des achats (SPEAKER_02) exprime des préoccupations concernant les dépenses et la gestion des bouteilles, tandis que le chef de secteur (SPEAKER_00) propose une démonstration, un tableau comparatif et une proposition chiffrée pour convaincre de l'intérêt économique et environnemental du système de fontaines. Source : B2B Appel.mp3 (documents 1, 2 et 3).",
+      "expected_source": "B2B Appel.mp3",
+      "source_present": true,
+      "facts_found": [
+        "fontaines à eau",
+        "bouteilles",
+        "proposition"
+      ],
+      "facts_missing": [],
+      "fact_recall": 1.0,
+      "lexical_facts_found": [
+        "bouteilles",
+        "proposition"
+      ],
+      "lexical_facts_missing": [
+        "fontaines à eau"
+      ],
+      "lexical_fact_recall": 0.6666666666666666,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": true
+    },
+    {
+      "question_id": "b2b-002",
+      "question": "Quel rendez-vous est finalement fixé ?",
+      "answer": "Le rendez-vous finalement fixé est le **mardi 14 avril à 17 heures** au **22 boulevard au marché**. Cette information est mentionnée dans le premier document (Source: B2B Appel.mp3) lorsqu'il est indiqué que « Nous avons donc rendez-vous le mardi 14 avril à 17 heures au 22 boulevard au marché. C'est réservé de confirmation. ».",
+      "expected_source": "B2B Appel.mp3",
+      "source_present": true,
+      "facts_found": [
+        "mardi",
+        "14",
+        "17 heures"
+      ],
+      "facts_missing": [],
+      "fact_recall": 1.0,
+      "lexical_facts_found": [
+        "mardi",
+        "14",
+        "17 heures"
+      ],
+      "lexical_facts_missing": [],
+      "lexical_fact_recall": 1.0,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": true
+    },
+    {
+      "question_id": "b2b-003",
+      "question": "Quel produit commercial est proposé à l'agence ?",
+      "answer": "Le produit commercial proposé à l'agence est un système de fontaines (ou distributeurs d'eau) destiné à remplacer la distribution d'eau en bouteilles individuelles. Ce système permettrait de réduire les coûts en évitant les déchets de bouteilles vides ou partiellement pleines, tout en offrant un accès à l'eau à température constante (fraîche ou tempérée).  \n\n**Source** : B2B Appel.mp3 (tous les documents mentionnés).",
+      "expected_source": "B2B Appel.mp3",
+      "source_present": true,
+      "facts_found": [
+        "fontaines",
+        "bouteilles"
+      ],
+      "facts_missing": [
+        "proposition"
+      ],
+      "fact_recall": 0.6666666666666666,
+      "lexical_facts_found": [
+        "fontaines",
+        "bouteilles"
+      ],
+      "lexical_facts_missing": [
+        "proposition"
+      ],
+      "lexical_fact_recall": 0.6666666666666666,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": false
+    },
+    {
+      "question_id": "b2b-004",
+      "question": "Combien de collaborateurs travaillent dans l'agence ?",
+      "answer": "L'agence compte 25 collaborateurs. Cette information est mentionnée dans le document source B2B Appel.mp3, où SPEAKER_02 indique : \"Nous sommes 25.\"",
+      "expected_source": "B2B Appel.mp3",
+      "source_present": true,
+      "facts_found": [
+        "25"
+      ],
+      "facts_missing": [],
+      "fact_recall": 1.0,
+      "lexical_facts_found": [
+        "25"
+      ],
+      "lexical_facts_missing": [],
+      "lexical_fact_recall": 1.0,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": true
+    },
+    {
+      "question_id": "b2b-005",
+      "question": "Quelles économies sont annoncées avec le système de fontaines ?",
+      "answer": "Le système de fontaines permet d'atteindre une économie générale de 20 à 30% par rapport aux bouteilles, selon le tableau comparatif établi dans le contexte. Cette estimation est mentionnée dans le fichier **B2B Appel.mp3** (parle SPEAKER_00).",
+      "expected_source": "B2B Appel.mp3",
+      "source_present": true,
+      "facts_found": [
+        "économie",
+        "20",
+        "30"
+      ],
+      "facts_missing": [],
+      "fact_recall": 1.0,
+      "lexical_facts_found": [
+        "économie",
+        "20",
+        "30"
+      ],
+      "lexical_facts_missing": [],
+      "lexical_fact_recall": 1.0,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": true
+    },
+    {
+      "question_id": "b2b-006",
+      "question": "Quelle est la prochaine action prévue après l'appel ?",
+      "answer": "La prochaine action prévue après l'appel est d'envoyer la proposition chiffrée par courrier, comme mentionné par SPEAKER_00 dans le document B2B Appel.mp3 (source 1). Ensuite, un rendez-vous est planifié pour le mardi 14 avril à 17 heures au 22 boulevard au marché, confirmé par SPEAKER_00 et SPEAKER_02 dans le même document. Ces étapes sont directement mentionnées dans le contexte.",
+      "expected_source": "B2B Appel.mp3",
+      "source_present": true,
+      "facts_found": [
+        "rendez-vous",
+        "mardi",
+        "17 heures"
+      ],
+      "facts_missing": [],
+      "fact_recall": 1.0,
+      "lexical_facts_found": [
+        "rendez-vous",
+        "mardi",
+        "17 heures"
+      ],
+      "lexical_facts_missing": [],
+      "lexical_fact_recall": 1.0,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": true
+    },
+    {
+      "question_id": "reunion-001",
+      "question": "Pourquoi cette réunion d'équipe a-t-elle été organisée ?",
+      "answer": "Cette réunion d'équipe a été organisée pour résoudre le problème d'un paquet de gâteau infecté d'insectes rapporté en magasin. Ce sujet est abordé dès le début du dialogue par SPEAKER_00, qui précise que l'objectif de la réunion est de traiter cette situation commune affectant plusieurs parties prenantes. Source : **Reunion dequipe.mp3**.",
+      "expected_source": "Reunion dequipe.mp3",
+      "source_present": true,
+      "facts_found": [],
+      "facts_missing": [
+        "problème commun",
+        "responsable",
+        "indemnisé"
+      ],
+      "fact_recall": 0.0,
+      "lexical_facts_found": [],
+      "lexical_facts_missing": [
+        "problème commun",
+        "responsable",
+        "indemnisé"
+      ],
+      "lexical_fact_recall": 0.0,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": false
+    },
+    {
+      "question_id": "reunion-002",
+      "question": "Quel est le principal problème évoqué pendant la réunion ?",
+      "answer": "Le principal problème évoqué pendant la réunion est la présence d'un paquet de gâteau infecté d'insectes rapporté en magasin. Ce sujet est abordé dès le début du discours du SPEAKER_00, qui souligne que l'objectif de la réunion est de résoudre ce problème commun.  \n**Source** : Reunion dequipe.mp3",
+      "expected_source": "Reunion dequipe.mp3",
+      "source_present": true,
+      "facts_found": [
+        "problème commun",
+        "résoudre ce problème"
+      ],
+      "facts_missing": [
+        "responsable"
+      ],
+      "fact_recall": 0.6666666666666666,
+      "lexical_facts_found": [
+        "problème commun",
+        "résoudre ce problème"
+      ],
+      "lexical_facts_missing": [
+        "responsable"
+      ],
+      "lexical_fact_recall": 0.6666666666666666,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": false
+    },
+    {
+      "question_id": "reunion-003",
+      "question": "Quelle demande concrète est formulée par la personne concernée ?",
+      "answer": "La personne concernée formule une demande concrète d'indemnisation en raison de l'incident de contamination d'un paquet de gâteau par des insectes. Elle exprime également un besoin d'agir rapidement pour résoudre le problème.  \n\n**Source** : Reunion dequipe.mp3 (partie mentionnant \"je suis venu ici pour être indemnisé j'ai besoin que ça se passe vite on prend bien problème\").",
+      "expected_source": "Reunion dequipe.mp3",
+      "source_present": true,
+      "facts_found": [
+        "indemnisé",
+        "vite"
+      ],
+      "facts_missing": [],
+      "fact_recall": 1.0,
+      "lexical_facts_found": [
+        "indemnisé",
+        "vite"
+      ],
+      "lexical_facts_missing": [],
+      "lexical_fact_recall": 1.0,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": true
+    },
+    {
+      "question_id": "reunion-004",
+      "question": "Quel principe doit guider le déroulement de la réunion ?",
+      "answer": "Le principe qui doit guider le déroulement de la réunion est de s'assurer que chaque participant considère que son avis a le même poids que celui des autres. Cette égalité de contribution est essentielle pour créer un climat propice à la résolution du problème soulevé. \n\n**Source** : Reunion dequipe.mp3",
+      "expected_source": "Reunion dequipe.mp3",
+      "source_present": true,
+      "facts_found": [
+        "même poids",
+        "climat",
+        "propice"
+      ],
+      "facts_missing": [],
+      "fact_recall": 1.0,
+      "lexical_facts_found": [
+        "même poids",
+        "climat",
+        "propice"
+      ],
+      "lexical_facts_missing": [],
+      "lexical_fact_recall": 1.0,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": true
+    }
+  ]
+}

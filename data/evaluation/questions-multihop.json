@@ -1,0 +1,56 @@
+[
+  {
+    "id": "multihop-b2b-001",
+    "source": "B2B Appel.mp3",
+    "question": "Quel produit est proposé, quel rendez-vous est fixé et quelle économie est annoncée ?",
+    "expected_facts": [
+      "fontaines",
+      "bouteilles",
+      "mardi",
+      "14",
+      "17 heures",
+      "économie",
+      "20",
+      "30"
+    ],
+    "expected_fact_variants": {
+      "fontaines": [
+        "fontaines à eau",
+        "système de fontaines"
+      ],
+      "économie": [
+        "économies"
+      ]
+    }
+  },
+  {
+    "id": "multihop-reunion-001",
+    "source": "Reunion dequipe.mp3",
+    "question": "Quel problème la réunion doit-elle résoudre, quelle demande la personne concernée formule-t-elle et quel principe doit guider les échanges ?",
+    "expected_facts": [
+      "problème commun",
+      "indemnisé",
+      "vite",
+      "même poids",
+      "climat",
+      "propice"
+    ],
+    "expected_fact_variants": {
+      "problème commun": [
+        "situation commune",
+        "problème"
+      ],
+      "indemnisé": [
+        "indemnisation",
+        "être indemnisée"
+      ],
+      "vite": [
+        "rapidement",
+        "urgence"
+      ],
+      "même poids": [
+        "même importance"
+      ]
+    }
+  }
+]

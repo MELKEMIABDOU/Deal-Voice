@@ -1,0 +1,29 @@
+{
+  "model": "qwen3:8b",
+  "top_k": 3,
+  "question_count": 1,
+  "source_accuracy": 1.0,
+  "mean_fact_recall": 0.6666666666666666,
+  "language_compliance": 1.0,
+  "pass_rate": 0.0,
+  "results": [
+    {
+      "question_id": "b2b-001",
+      "question": "Quel est l'objectif principal de l'appel commercial ?",
+      "answer": "L'objectif principal de l'appel commercial est de promouvoir le système de fontaines à eau en remplacement des bouteilles individuelles, afin de réduire les coûts et les déchets. Le responsable de la société (SPEAKER_00) propose une analyse comparative des deux solutions, souligne les économies potentielles (20 à 30 %), et insiste sur les avantages d'une gestion plus efficace de l'eau (température constante, réduction des bouteilles vides dans les poubelles). Il propose également une démonstration et un rendez-vous pour finaliser la transition vers le système de fontaines. **Source : B2B Appel.mp3** (documents 1, 2 et 3).",
+      "expected_source": "B2B Appel.mp3",
+      "source_present": true,
+      "facts_found": [
+        "fontaines à eau",
+        "bouteilles"
+      ],
+      "facts_missing": [
+        "proposition"
+      ],
+      "fact_recall": 0.6666666666666666,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": false
+    }
+  ]
+}

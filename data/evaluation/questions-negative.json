@@ -1,0 +1,30 @@
+[
+  {
+    "id": "negative-001",
+    "source": "B2B Appel.mp3",
+    "question": "Quel est le chiffre d'affaires annuel de l'agence ?",
+    "expected_facts": [],
+    "expected_behavior": "refusal"
+  },
+  {
+    "id": "negative-002",
+    "source": "B2B Appel.mp3",
+    "question": "Quel est le nom du directeur général de l'agence ?",
+    "expected_facts": [],
+    "expected_behavior": "refusal"
+  },
+  {
+    "id": "negative-003",
+    "source": "Reunion dequipe.mp3",
+    "question": "Quel rendez-vous est prévu dans la réunion d'équipe ?",
+    "expected_facts": [],
+    "expected_behavior": "refusal"
+  },
+  {
+    "id": "negative-004",
+    "source": "Reunion dequipe.mp3",
+    "question": "Quel est le numéro de téléphone de la personne concernée ?",
+    "expected_facts": [],
+    "expected_behavior": "refusal"
+  }
+]

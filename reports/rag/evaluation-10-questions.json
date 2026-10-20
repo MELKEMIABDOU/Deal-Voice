@@ -1,0 +1,186 @@
+{
+  "top_k": 5,
+  "question_count": 10,
+  "source_recall_at_k": 1.0,
+  "mean_fact_recall": 0.9666666666666666,
+  "results": [
+    {
+      "question_id": "b2b-001",
+      "expected_source": "B2B Appel.mp3",
+      "retrieved_sources": [
+        "B2B Appel.mp3",
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "bouteilles",
+        "proposition"
+      ],
+      "expected_facts_missing": [
+        "fontaines à eau"
+      ],
+      "fact_recall": 0.6666666666666666
+    },
+    {
+      "question_id": "b2b-002",
+      "expected_source": "B2B Appel.mp3",
+      "retrieved_sources": [
+        "B2B Appel.mp3",
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "mardi",
+        "14",
+        "17 heures"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0
+    },
+    {
+      "question_id": "b2b-003",
+      "expected_source": "B2B Appel.mp3",
+      "retrieved_sources": [
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "Reunion dequipe.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "fontaines",
+        "bouteilles",
+        "proposition"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0
+    },
+    {
+      "question_id": "b2b-004",
+      "expected_source": "B2B Appel.mp3",
+      "retrieved_sources": [
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "25"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0
+    },
+    {
+      "question_id": "b2b-005",
+      "expected_source": "B2B Appel.mp3",
+      "retrieved_sources": [
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "Reunion dequipe.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "économie",
+        "20",
+        "30"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0
+    },
+    {
+      "question_id": "b2b-006",
+      "expected_source": "B2B Appel.mp3",
+      "retrieved_sources": [
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "rendez-vous",
+        "mardi",
+        "17 heures"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0
+    },
+    {
+      "question_id": "reunion-001",
+      "expected_source": "Reunion dequipe.mp3",
+      "retrieved_sources": [
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "problème commun",
+        "responsable",
+        "indemnisé"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0
+    },
+    {
+      "question_id": "reunion-002",
+      "expected_source": "Reunion dequipe.mp3",
+      "retrieved_sources": [
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "problème commun",
+        "responsable",
+        "résoudre ce problème"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0
+    },
+    {
+      "question_id": "reunion-003",
+      "expected_source": "Reunion dequipe.mp3",
+      "retrieved_sources": [
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "indemnisé",
+        "vite"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0
+    },
+    {
+      "question_id": "reunion-004",
+      "expected_source": "Reunion dequipe.mp3",
+      "retrieved_sources": [
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "même poids",
+        "climat",
+        "propice"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0
+    }
+  ]
+}

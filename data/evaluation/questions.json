@@ -1,0 +1,133 @@
+[
+  {
+    "id": "b2b-001",
+    "source": "B2B Appel.mp3",
+    "question": "Quel est l'objectif principal de l'appel commercial ?",
+    "expected_facts": [
+      "fontaines à eau",
+      "bouteilles",
+      "proposition"
+    ],
+    "expected_fact_variants": {
+      "fontaines à eau": [
+        "fontaines d'eau",
+        "système de fontaines"
+      ],
+      "proposition": [
+        "propose",
+        "proposer",
+        "solution proposée"
+      ]
+    },
+    "forbidden_claims": [
+      "garantie à vie",
+      "confiance des clients"
+    ]
+  },
+  {
+    "id": "b2b-002",
+    "source": "B2B Appel.mp3",
+    "question": "Quel rendez-vous est finalement fixé ?",
+    "expected_facts": [
+      "mardi",
+      "14",
+      "17 heures"
+    ]
+  },
+  {
+    "id": "b2b-003",
+    "source": "B2B Appel.mp3",
+    "question": "Quel produit commercial est proposé à l'agence ?",
+    "expected_facts": [
+      "fontaines",
+      "bouteilles"
+    ]
+  },
+  {
+    "id": "b2b-004",
+    "source": "B2B Appel.mp3",
+    "question": "Combien de collaborateurs travaillent dans l'agence ?",
+    "expected_facts": [
+      "25"
+    ]
+  },
+  {
+    "id": "b2b-005",
+    "source": "B2B Appel.mp3",
+    "question": "Quelles économies sont annoncées avec le système de fontaines ?",
+    "expected_facts": [
+      "économie",
+      "20",
+      "30"
+    ]
+  },
+  {
+    "id": "b2b-006",
+    "source": "B2B Appel.mp3",
+    "question": "Quelle est la prochaine action prévue après l'appel ?",
+    "expected_facts": [
+      "rendez-vous",
+      "mardi",
+      "17 heures"
+    ]
+  },
+  {
+    "id": "reunion-001",
+    "source": "Reunion dequipe.mp3",
+    "question": "Pourquoi cette réunion d'équipe a-t-elle été organisée ?",
+    "expected_facts": [
+      "problème commun",
+      "résoudre ce problème"
+    ],
+    "expected_fact_variants": {
+      "problème commun": [
+        "situation commune",
+        "problème"
+      ],
+      "résoudre ce problème": [
+        "résoudre le problème",
+        "traiter cette situation"
+      ]
+    },
+    "literal_evidence": [
+      "paquet",
+      "gâteaux",
+      "infectés",
+      "insectes"
+    ]
+  },
+  {
+    "id": "reunion-002",
+    "source": "Reunion dequipe.mp3",
+    "question": "Quel est le principal problème évoqué pendant la réunion ?",
+    "expected_facts": [
+      "problème commun",
+      "résoudre ce problème"
+    ],
+    "literal_evidence": [
+      "gâteaux",
+      "infectés",
+      "insectes",
+      "magasin"
+    ]
+  },
+  {
+    "id": "reunion-003",
+    "source": "Reunion dequipe.mp3",
+    "question": "Quelle demande concrète est formulée par la personne concernée ?",
+    "expected_facts": [
+      "indemnisé",
+      "vite"
+    ]
+  },
+  {
+    "id": "reunion-004",
+    "source": "Reunion dequipe.mp3",
+    "question": "Quel principe doit guider le déroulement de la réunion ?",
+    "expected_facts": [
+      "même poids",
+      "climat",
+      "propice"
+      ]
+    }
+]

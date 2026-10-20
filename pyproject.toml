@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deal-voice"
+version = "0.1.0"
+description = "Enterprise Multimodal RAG: commercial call diarization + PDF knowledge with Zero-Trust RBAC on Embedded Qdrant."
+readme = "README.md"
+requires-python = ">=3.10, <3.14"
+dependencies = [
+    # Vector DB (embedded, no Docker)
+    "qdrant-client>=1.11.0",
+    # Data models & config
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.2.0",
+    "python-dotenv>=1.0.1",
+    # PDF extraction (local, no API cost)
+    "pymupdf>=1.24.0",
+    # Audio transcription + speaker diarization
+    "deepgram-sdk>=3.0.0",
+    # LangChain integration
+    "langchain>=0.2.0",
+    "langchain-core>=0.2.0",
+    "langchain-qdrant>=0.1.0",
+    "langchain-huggingface>=0.0.3",
+    "langchain-text-splitters>=0.2.0",
+    "langchain-classic>=1.0.0",
+    # Embedding model (runs on CPU/GPU locally)
+    "sentence-transformers>=3.0.0",
+    "datasets<4.0.0",
+    "torch>=2.2.0",
+    # Data handling
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "tabulate>=0.9.0",
+    # API server
+    "fastapi>=0.111.0",
+    "uvicorn>=0.30.0",
+    # CLI / Logging
+    "rich>=13.7.0",
+    "whisperx>=3.7.2",
+    "transformers>=4.45.0",
+    "torchaudio>=2.8.0",
+    "langchain-ollama>=1.1.0",
+    "langchain-openai>=1.7.1",
+    "langchain-community>=0.4.2",
+    "docling>=2.138.0",
+    "streamlit>=1.65.0",
+    "requests>=2.34.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.4.0",
+]
+docling = [
+    "docling>=2.0.0",
+]
+eval = [
+    "ragas>=0.1.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[dependency-groups]
+dev = [
+    "deepeval>=4.2.8",
+    "pytest>=9.1.1",
+]

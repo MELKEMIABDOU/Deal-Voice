@@ -1,0 +1,53 @@
+{
+  "results": {
+    "channels": [
+      {
+        "alternatives": [
+          {
+            "transcript": "Welcome to Deal-Voice enterprise sales. What is your Enterprise Plus pricing?",
+            "paragraphs": {
+              "paragraphs": [
+                {
+                  "speaker": 0,
+                  "start": 0.5,
+                  "end": 3.8,
+                  "sentences": [
+                    {
+                      "text": "Welcome to Deal-Voice enterprise sales. My name is Alex.",
+                      "start": 0.5,
+                      "end": 3.8
+                    }
+                  ]
+                },
+                {
+                  "speaker": 1,
+                  "start": 4.1,
+                  "end": 8.2,
+                  "sentences": [
+                    {
+                      "text": "Hi Alex, what is your Enterprise Plus pricing?",
+                      "start": 4.1,
+                      "end": 8.2
+                    }
+                  ]
+                },
+                {
+                  "speaker": 0,
+                  "start": 8.5,
+                  "end": 14.0,
+                  "sentences": [
+                    {
+                      "text": "The Enterprise Plus plan is $45,000 per year for up to 500 seats.",
+                      "start": 8.5,
+                      "end": 14.0
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

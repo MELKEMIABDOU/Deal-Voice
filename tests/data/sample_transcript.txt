@@ -1,0 +1,7 @@
+Agent: Welcome to Deal-Voice enterprise sales. My name is Alex. How can I help you today?
+Customer: Hi Alex, we are evaluating your speech intelligence platform for 250 sales reps. What is your Enterprise Plus pricing?
+Agent: Our Enterprise Plus plan is forty-five thousand dollars per year for up to 500 seats. It includes real-time diarization and local vector search.
+Customer: Does that support zero-trust role-based access control?
+Agent: Yes, all ingested contracts and call transcripts are indexed with strict RBAC metadata in Qdrant.
+Customer: That sounds great. Please send over the contract and SLA terms.
+Agent: Absolutely, I will email the master services agreement right away.

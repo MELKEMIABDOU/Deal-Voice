@@ -1,0 +1,143 @@
+{
+  "top_k": 5,
+  "question_count": 6,
+  "source_recall_at_k": 1.0,
+  "mean_fact_recall": 1.0,
+  "mean_precision_at_k": 0.5,
+  "mrr": 1.0,
+  "mean_ndcg": 1.0,
+  "latency_ms": {
+    "mean": 143.64,
+    "p50": 135.06,
+    "p95": 182.27,
+    "max": 182.27
+  },
+  "results": [
+    {
+      "question_id": "robust-b2b-001",
+      "retrieved_sources": [
+        "B2B Appel.mp3",
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "fontaines à eau",
+        "bouteilles"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0,
+      "expected_source_rank": 1,
+      "reciprocal_rank": 1.0,
+      "ndcg": 1.0,
+      "precision_at_k": 0.75,
+      "retrieval_latency_ms": 182.27
+    },
+    {
+      "question_id": "robust-b2b-002",
+      "retrieved_sources": [
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "25"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0,
+      "expected_source_rank": 1,
+      "reciprocal_rank": 1.0,
+      "ndcg": 1.0,
+      "precision_at_k": 0.75,
+      "retrieval_latency_ms": 128.72
+    },
+    {
+      "question_id": "robust-b2b-003",
+      "retrieved_sources": [
+        "B2B Appel.mp3",
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "mardi",
+        "14",
+        "17 heures"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0,
+      "expected_source_rank": 1,
+      "reciprocal_rank": 1.0,
+      "ndcg": 1.0,
+      "precision_at_k": 0.75,
+      "retrieval_latency_ms": 135.06
+    },
+    {
+      "question_id": "robust-reunion-001",
+      "retrieved_sources": [
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "problème commun",
+        "résoudre ce problème"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0,
+      "expected_source_rank": 1,
+      "reciprocal_rank": 1.0,
+      "ndcg": 1.0,
+      "precision_at_k": 0.25,
+      "retrieval_latency_ms": 137.6
+    },
+    {
+      "question_id": "robust-reunion-002",
+      "retrieved_sources": [
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "indemnisé"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0,
+      "expected_source_rank": 1,
+      "reciprocal_rank": 1.0,
+      "ndcg": 1.0,
+      "precision_at_k": 0.25,
+      "retrieval_latency_ms": 133.63
+    },
+    {
+      "question_id": "robust-reunion-003",
+      "retrieved_sources": [
+        "Reunion dequipe.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3",
+        "B2B Appel.mp3"
+      ],
+      "source_hit": true,
+      "expected_facts_found": [
+        "même poids",
+        "climat",
+        "propice"
+      ],
+      "expected_facts_missing": [],
+      "fact_recall": 1.0,
+      "expected_source_rank": 1,
+      "reciprocal_rank": 1.0,
+      "ndcg": 1.0,
+      "precision_at_k": 0.25,
+      "retrieval_latency_ms": 144.55
+    }
+  ]
+}

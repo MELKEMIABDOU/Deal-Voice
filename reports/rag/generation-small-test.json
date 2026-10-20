@@ -1,0 +1,28 @@
+{
+  "model": "llama3.2:3b",
+  "top_k": 3,
+  "question_count": 1,
+  "source_accuracy": 0.0,
+  "mean_fact_recall": 0.0,
+  "language_compliance": 1.0,
+  "pass_rate": 0.0,
+  "results": [
+    {
+      "question_id": "b2b-001",
+      "question": "Quel est l'objectif principal de l'appel commercial ?",
+      "answer": "Je ne dispose pas de suffisamment d'informations autorisées dans la base de connaissances pour répondre à cette question.",
+      "expected_source": "B2B Appel.mp3",
+      "source_present": false,
+      "facts_found": [],
+      "facts_missing": [
+        "fontaines à eau",
+        "bouteilles",
+        "proposition"
+      ],
+      "fact_recall": 0.0,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": false
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+[
+    {
+        "query": "What is the Q3 software pricing?",
+        "role": "sales",
+        "expected_context_keywords": [
+            "$1,200",
+            "Setup fees"
+        ],
+        "expected_answer_keywords": [
+            "$1,200",
+            "seat"
+        ]
+    },
+    {
+        "query": "What is the CEO's new compensation?",
+        "role": "admin",
+        "expected_context_keywords": [
+            "$2M",
+            "base salary"
+        ],
+        "expected_answer_keywords": [
+            "$2M",
+            "4%"
+        ]
+    }
+]

@@ -1,0 +1,29 @@
+{
+  "model": "llama3:instruct",
+  "top_k": 3,
+  "question_count": 1,
+  "source_accuracy": 0.0,
+  "mean_fact_recall": 0.3333333333333333,
+  "language_compliance": 1.0,
+  "pass_rate": 0.0,
+  "results": [
+    {
+      "question_id": "b2b-001",
+      "question": "Quel est l'objectif principal de l'appel commercial ?",
+      "answer": "L'objectif principal de l'appel commercial est de proposer une solution pour améliorer l'alimentation en eau des salariés de l'agence, en échangeant les bouteilles individuelles par des fontaines, ce qui permettrait des économies et une gestion plus efficace des ressources.",
+      "expected_source": "B2B Appel.mp3",
+      "source_present": false,
+      "facts_found": [
+        "bouteilles"
+      ],
+      "facts_missing": [
+        "fontaines à eau",
+        "proposition"
+      ],
+      "fact_recall": 0.3333333333333333,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "passed": false
+    }
+  ]
+}

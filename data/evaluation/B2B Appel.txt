@@ -1,0 +1,126 @@
+
+[Speaker 3]
+Agence des RVB, Sandrine, bonjour.
+
+[Speaker 1]
+Bonjour madame, Éric Souplin, chef de secteur de la société Aquaforté. Pouvez-vous me passer le responsable des achats fournitures, s'il vous plaît ?
+
+[Speaker 3]
+Oui, c'est à quel sujet ?
+
+[Speaker 1]
+Aquaforté est spécialiste des fontaines à eau. Actuellement, est-ce que votre agence met de l'eau à disposition de ses salariés ?
+
+[Speaker 3]
+Oui, nous avons des bouteilles en libre-service.
+
+[Speaker 1]
+D'accord, et qui est le responsable des achats ?
+
+[Speaker 3]
+C'est M. Torné.
+
+[Speaker 1]
+M. Torné, T-O-R-N-E. Qui est ?
+
+[Speaker 3]
+Le responsable des achats pour le siège.
+
+[Speaker 1]
+Pouvez-vous me le passer, s'il vous plaît ?
+
+[Speaker 3]
+Oui, je vous passe mon assistante.
+
+[Speaker 1]
+C'est madame ?
+
+[Speaker 3]
+Madame Ouardich, je vous la passe.
+
+[Speaker 1]
+Je vous remercie, au revoir madame.
+
+[Speaker 2]
+Karima Ouardich, bonjour.
+
+[Speaker 1]
+Bonjour madame, vous êtes bien l'assistante de M. Torné ?
+
+[Speaker 2]
+Oui.
+
+[Speaker 1]
+Eric Souplin, chef de secteur de la société Aquaforté. Nous sommes spécialistes des fontaines à eau. Actuellement, vous mettez bien des bouteilles individuelles à disposition de votre personnel ?
+
+[Speaker 2]
+Oui, c'est ce qui est le plus pratique.
+
+[Speaker 1]
+C'est-à-dire ?
+
+[Speaker 2]
+Écoutez, j'ai vraiment pas le temps là, envoyez-nous plutôt une documentation ?
+
+[Speaker 1]
+Très bien, je vous l'adresse. C'est bien vous qui gérez ces achats ?
+
+[Speaker 2]
+Oui, pour l'eau, c'est moi qui gère.
+
+[Speaker 1]
+Parfait, je vais donc vous faire une proposition sur mesure. Combien de bouteilles commandez-vous par mois en moyenne ?
+
+[Speaker 2]
+Un peu trop à mon goût, si vous voulez savoir. Les gens ne font pas attention. Je vais d'ailleurs limiter les commandes.
+
+[Speaker 1]
+Oui, je comprends. On voit souvent des bouteilles encore à moitié pleines dans les poubelles.
+
+[Speaker 2]
+Oui, et pas qu'une.
+
+[Speaker 1]
+Et avez-vous calculé ce que ça vous coûterait par personne ?
+
+[Speaker 2]
+Non, mais ce sera toujours trop pour M. Tornay.
+
+[Speaker 1]
+Dans ce cas, je peux lui faire une simulation. Il me faut juste le nombre de collaborateurs dans l'agence.
+
+[Speaker 2]
+Nous sommes 25.
+
+[Speaker 1]
+Et bien sur cette base, je vais établir un tableau comparatif entre les bouteilles et les fontaines. Vous pourrez ainsi mesurer les économies de notre système. On constate généralement une économie de 20 à 30%.
+
+[Speaker 2]
+Ça me paraît un peu beaucoup, ça.
+
+[Speaker 1]
+Oui, avec les fontaines, on ne prend que ce qu'on consomme. Vous ne verrez plus de bouteilles qui traînent à moitié pleine. Et en plus, vous aurez de l'eau à température constante toute l'année, fraîche ou tempérée.
+
+[Speaker 2]
+Oui, mais ça ne fait pas trop de bruit, votre machine ?
+
+[Speaker 1]
+Écoutez, je vous propose de faire une démonstration. En début de semaine prochaine, par exemple. Et en plus, vous pourrez apprécier vous-même la discrétion de notre matériel.
+
+[Speaker 2]
+Attendez, envoyez-moi d'abord votre proposition chiffrée et nous prendrons rendez-vous en fonction de ce que nous recevrons.
+
+[Speaker 1]
+C'est entendu, vous la recevrez dès demain par courrier. Nous pouvons prendre un rendez-vous de principe, mardi prochain par exemple, le 14 à 11h ou en fin de journée.
+
+[Speaker 2]
+Non, attendez, plutôt en fin de journée. M. Tornay sera plus disponible vers 17h.
+
+[Speaker 1]
+C'est noté. Nous avons donc rendez-vous le mardi 14 avril à 17h au 22 boulevard Beaumarchais. C'est aux réserves de confirmation.
+
+[Speaker 2]
+Merci, au revoir.
+
+[Speaker 1]
+Au revoir, merci et bonne journée.

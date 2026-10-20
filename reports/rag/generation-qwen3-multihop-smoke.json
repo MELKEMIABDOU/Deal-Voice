@@ -1,0 +1,52 @@
+{
+  "model": "qwen3:8b",
+  "top_k": 3,
+  "question_count": 1,
+  "source_accuracy": 1.0,
+  "mean_fact_recall": 1.0,
+  "language_compliance": 1.0,
+  "refusal_accuracy": null,
+  "fidelity_accuracy": 1.0,
+  "pass_rate": 1.0,
+  "results": [
+    {
+      "question_id": "multihop-b2b-001",
+      "question": "Quel produit est proposé, quel rendez-vous est fixé et quelle économie est annoncée ?",
+      "answer": "Le produit proposé est un système de fontaines d'eau pour remplacer les bouteilles individuelles, permettant une économie de 20 à 30% selon le contexte. Le rendez-vous est fixé au mardi 14 avril à 17 heures au 22 boulevard au marché. Ces informations proviennent du fichier **B2B Appel.mp3**.",
+      "expected_source": "B2B Appel.mp3",
+      "source_present": true,
+      "facts_found": [
+        "fontaines",
+        "bouteilles",
+        "mardi",
+        "14",
+        "17 heures",
+        "économie",
+        "20",
+        "30"
+      ],
+      "facts_missing": [],
+      "fact_recall": 1.0,
+      "lexical_facts_found": [
+        "fontaines",
+        "bouteilles",
+        "mardi",
+        "14",
+        "17 heures",
+        "économie",
+        "20",
+        "30"
+      ],
+      "lexical_facts_missing": [],
+      "lexical_fact_recall": 1.0,
+      "answer_non_empty": true,
+      "likely_french": true,
+      "expected_behavior": "answer",
+      "refusal_detected": false,
+      "forbidden_claims": [],
+      "unsupported_claims_found": [],
+      "fidelity_pass": true,
+      "passed": true
+    }
+  ]
+}

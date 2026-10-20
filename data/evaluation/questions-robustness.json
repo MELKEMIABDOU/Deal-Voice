@@ -1,0 +1,48 @@
+[
+  {
+    "id": "robust-b2b-001",
+    "source": "B2B Appel.mp3",
+    "question": "Quel est le but commercial principal de l'appel ?",
+    "expected_facts": ["fontaines à eau", "bouteilles"],
+    "expected_fact_variants": {
+      "fontaines à eau": ["fontaines", "système de fontaines"]
+    }
+  },
+  {
+    "id": "robust-b2b-002",
+    "source": "B2B Appel.mp3",
+    "question": "Combien de personnes travaillent dans l'agence ?",
+    "expected_facts": ["25"]
+  },
+  {
+    "id": "robust-b2b-003",
+    "source": "B2B Appel.mp3",
+    "question": "C'est pour quand le rendez-vous prévu ?",
+    "expected_facts": ["mardi", "14", "17 heures"]
+  },
+  {
+    "id": "robust-reunion-001",
+    "source": "Reunion dequipe.mp3",
+    "question": "Pourquoi l'équipe s'est-elle réunie ?",
+    "expected_facts": ["problème commun", "résoudre ce problème"],
+    "expected_fact_variants": {
+      "problème commun": ["situation commune", "problème"],
+      "résoudre ce problème": ["résoudre le problème", "traiter cette situation"]
+    }
+  },
+  {
+    "id": "robust-reunion-002",
+    "source": "Reunion dequipe.mp3",
+    "question": "Quelle compensation la personne demande-t-elle ?",
+    "expected_facts": ["indemnisé"],
+    "expected_fact_variants": {
+      "indemnisé": ["indemnisation", "être indemnisée"]
+    }
+  },
+  {
+    "id": "robust-reunion-003",
+    "source": "Reunion dequipe.mp3",
+    "question": "Quelle règle d'échange est annoncée au début de la réunion ?",
+    "expected_facts": ["même poids", "climat", "propice"]
+  }
+]
