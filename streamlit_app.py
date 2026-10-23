@@ -17,7 +17,7 @@ from deal_voice.ingestion.indexer import EnterpriseIndexer
 from deal_voice.retrieval.search import LocalSearchEngine
 
 
-st.set_page_config (
+st.set_page_config(
     page_title="Deal-Voice RAG",
     page_icon="🎙️",
     layout="wide",
@@ -46,6 +46,13 @@ def render_source(document: Document, index: int) -> None:
     metadata: dict[str, Any] = document.metadata
     source = metadata.get("source", "inconnu")
     st.markdown(f"**Source {index}: `{source}`**")
+
+    if metadata.get("content_kind") == "table":
+        completeness = "complète" if metadata.get("table_complete") else "partielle"
+        st.caption(
+            f"Tableau : {metadata.get('table_title') or 'sans titre'} · "
+            f"{metadata.get('table_row_count', '?')} lignes · {completeness}"
+        )
 
     citation = []
     speakers = metadata.get("speakers")
@@ -154,6 +161,11 @@ def index_uploaded_files(uploaded_files: list[Any], whisper_model: str) -> list[
 
 
 def main() -> None:
+    # Apply selection changes before creating the multiselect widget.
+    if "pending_selected_documents" in st.session_state:
+        st.session_state["selected_documents"] = st.session_state.pop(
+            "pending_selected_documents"
+        )
     st.session_state.setdefault("selected_documents", [])
 
     st.title("🎙️ Deal-Voice")
@@ -184,7 +196,10 @@ def main() -> None:
             user_role = None if selected_role == "Aucun filtre" else selected_role
         search_engine = load_search_engine()
         available_documents = search_engine.list_documents()
-        labels = {doc["document_id"]: doc["source"] for doc in available_documents}
+        labels = {
+            doc["document_id"]: f"{doc['source']} · {doc['document_id'][:8]}"
+            for doc in available_documents
+        }
         selected_ids = st.multiselect(
             "Documents à interroger",
             list(labels),
@@ -209,7 +224,7 @@ def main() -> None:
         if selected_ids and st.button("Supprimer les documents sélectionnés"):
             ids_to_delete = selected_ids
             search_engine.delete_documents(ids_to_delete)
-            st.session_state["selected_documents"] = []
+            st.session_state["pending_selected_documents"] = []
             st.success(f"{len(ids_to_delete)} document(s) supprimé(s).")
             st.rerun()
         st.markdown("**Préparation locale**")
@@ -228,6 +243,8 @@ def main() -> None:
         try:
             with st.spinner("Ingestion et indexation en cours..."):
                 indexed_names = index_uploaded_files(uploaded_files, whisper_model)
+            # Select these uploads after the rerun, before the widget is built.
+            st.session_state["pending_selected_documents"] = indexed_names
             st.success(
                 f"{len(indexed_names)} fichier(s) indexé(s)."
             )

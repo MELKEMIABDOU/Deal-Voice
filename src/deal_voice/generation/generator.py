@@ -49,6 +49,11 @@ class RAGGenerator:
             "asks for all items. If a retrieved table is marked incomplete, do not "
             "claim an exhaustive list or a global maximum/minimum; say that the "
             "available table excerpt is incomplete.\n\n"
+            "11. For table questions, use the column headers to identify each value. "
+            "Never combine prices, quantities, margins, or stocks from different "
+            "columns or sections. Preserve numeric values and decimal separators "
+            "exactly as written in the selected table; never turn 1,00 € into 100, "
+            "or infer values for rows that are not present.\n\n"
             "{answer_language_instruction}\n\n"
             "Retrieved Context:\n{context}"
         )
