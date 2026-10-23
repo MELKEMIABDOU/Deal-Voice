@@ -4,6 +4,7 @@ data/qdrant_storage/
 data/raw/
 data/processed/
 data/evaluation/*.mp3
+reports/transcription/
 local_qdrant_db/
 local_qdrant_db_backup/
 
