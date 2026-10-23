@@ -228,3 +228,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local evaluation PDFs (may contain private test data)
+data/evaluation/*.pdf

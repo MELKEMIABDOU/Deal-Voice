@@ -96,10 +96,12 @@ def index_uploaded_files(uploaded_files: list[Any], whisper_model: str) -> list[
                     )
                 documents.extend(parsed)
             elif suffix in {".mp3", ".wav", ".m4a", ".flac"}:
-                import torchaudio
+                # Use WhisperX's FFmpeg-backed decoder.  torchaudio.info() has
+                # no usable MP3 backend in some Windows/PyTorch installations.
+                import whisperx
 
-                audio_info = torchaudio.info(str(file_path))
-                duration_minutes = audio_info.num_frames / audio_info.sample_rate / 60
+                audio = whisperx.load_audio(str(file_path))
+                duration_minutes = len(audio) / 16_000 / 60
                 if duration_minutes > settings.max_audio_duration_minutes:
                     raise ValueError(
                         f"{uploaded_file.name} dépasse la durée maximale de "
@@ -129,7 +131,10 @@ def index_uploaded_files(uploaded_files: list[Any], whisper_model: str) -> list[
                     "Format non supporté. Utilisez PDF, MP3, WAV, M4A ou FLAC."
                 )
 
-        indexer = EnterpriseIndexer()
+        # Reuse Streamlit's cached local Qdrant client. Opening a second
+        # QdrantLocal client for the same folder triggers its file lock.
+        search_engine = load_search_engine()
+        indexer = EnterpriseIndexer(client=search_engine.client)
         indexer.index_documents(documents)
     except Exception:
         if indexer is not None:
@@ -143,7 +148,8 @@ def index_uploaded_files(uploaded_files: list[Any], whisper_model: str) -> list[
         raise
     finally:
         if indexer is not None:
-            indexer.client.close()
+            if indexer is not None and indexer._owns_client:
+                indexer.client.close()
     return document_ids
 
 
@@ -220,7 +226,6 @@ def main() -> None:
         "Indexer les fichiers sélectionnés", use_container_width=True
     ):
         try:
-            st.cache_resource.clear()
             with st.spinner("Ingestion et indexation en cours..."):
                 indexed_names = index_uploaded_files(uploaded_files, whisper_model)
             st.success(

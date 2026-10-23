@@ -42,6 +42,13 @@ class RAGGenerator:
             "Do not replace the answer with a general summary of the document, and do "
             "not cite unrelated facts. Use the insufficient-information sentence from "
             "rule 2 when no reliable answer can be given.\n\n"
+            "10. Treat Markdown tables as structured data: keep every row's values "
+            "associated with its column headers. For requests to list, count, filter, "
+            "compare, rank, or calculate across a table, inspect every row of each "
+            "retrieved table marked complete. Include every matching row when the user "
+            "asks for all items. If a retrieved table is marked incomplete, do not "
+            "claim an exhaustive list or a global maximum/minimum; say that the "
+            "available table excerpt is incomplete.\n\n"
             "{answer_language_instruction}\n\n"
             "Retrieved Context:\n{context}"
         )
@@ -75,6 +82,15 @@ class RAGGenerator:
             if metadata.get("speakers"):
                 metadata_lines.append(
                     f"Speakers: {', '.join(metadata['speakers'])}"
+                )
+            if metadata.get("content_kind") == "table":
+                metadata_lines.extend(
+                    [
+                        f"Table title: {metadata.get('table_title') or 'Untitled'}",
+                        f"Table rows: {metadata.get('table_row_count', 'unknown')}",
+                        "Table completeness: "
+                        + ("complete" if metadata.get("table_complete") else "incomplete"),
+                    ]
                 )
             context_parts.append(
                 "--- Retrieved document ---\n"
