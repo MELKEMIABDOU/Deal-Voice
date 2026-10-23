@@ -1,13 +1,16 @@
 import json
 import pytest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from deepeval import assert_test
 from deepeval.test_case import LLMTestCase
 from deepeval.metrics import FaithfulnessMetric, AnswerRelevancyMetric
+from langchain_core.documents import Document
 
 # Import your pipeline components and the custom judge
 from deal_voice.retrieval.search import LocalSearchEngine
 from deal_voice.generation.generator import RAGGenerator
+from deal_voice.ingestion.indexer import EnterpriseIndexer
 from tests.evaluation.local_judge import LocalOllamaJudge
 
 # 1. Load the Golden Dataset
@@ -16,14 +19,49 @@ def load_golden_dataset():
     with open(dataset_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-# 2. Shared fixture to avoid re-initializing models and locking Qdrant DB concurrently
+# 2. Use an isolated, seeded Qdrant DB so the evaluation never depends on the
+# developer's local collection or previously uploaded files.
 @pytest.fixture(scope="module")
 def rag_pipeline():
-    search_engine = LocalSearchEngine()
+    temp_db = TemporaryDirectory(prefix="deal_voice_rag_eval_")
+    indexer = EnterpriseIndexer(
+        db_path=temp_db.name,
+        collection_name="rag_quality_eval",
+    )
+    indexer.index_documents(
+        [
+            Document(
+                page_content=(
+                    "Q3 software pricing is $1,200 per seat. Setup fees are "
+                    "charged separately."
+                ),
+                metadata={
+                    "source": "software_pricing.pdf",
+                    "allowed_roles": ["sales", "admin"],
+                },
+            ),
+            Document(
+                page_content=(
+                    "The CEO's new compensation is a $2M base salary and a 4% "
+                    "annual increase."
+                ),
+                metadata={
+                    "source": "executive_compensation.pdf",
+                    "allowed_roles": ["admin"],
+                },
+            ),
+        ]
+    )
+    indexer.client.close()
+    search_engine = LocalSearchEngine(
+        db_path=temp_db.name,
+        collection_name="rag_quality_eval",
+    )
     generator = RAGGenerator(model_name="llama3")
     local_judge = LocalOllamaJudge(model_name="llama3")
     yield search_engine, generator, local_judge
     search_engine.client.close()
+    temp_db.cleanup()
 
 # 3. Pytest Parametrize dynamically creates a test for every item in the JSON
 @pytest.mark.parametrize("test_case_data", load_golden_dataset())

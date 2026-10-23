@@ -3,6 +3,12 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from http import HTTPStatus
 from deal_voice.api.main import QueryRequest, get_current_user_role
+from deal_voice.config import settings
+
+
+@pytest.fixture(autouse=True)
+def enable_rbac_for_role_validation_tests(monkeypatch):
+    monkeypatch.setattr(settings, "rbac_enabled", True)
 
 
 def test_query_request_accepts_valid_values():

@@ -3,6 +3,12 @@ from fastapi.testclient import TestClient
 from langchain_core.documents import Document
 
 from deal_voice.api.main import app
+from deal_voice.config import settings
+
+
+@pytest.fixture(autouse=True)
+def enable_rbac_for_api_tests(monkeypatch):
+    monkeypatch.setattr(settings, "rbac_enabled", True)
 
 
 class FakeSearchEngine:
@@ -92,7 +98,9 @@ def test_search_route_returns_generated_answer(api_client: TestClient):
 def test_search_route_rejects_invalid_payload(
     api_client: TestClient, payload: dict[str, object]
 ):
-    response = api_client.post("/api/v1/search", json=payload)
+    response = api_client.post(
+        "/api/v1/search", json=payload, headers={"X-User-Role": "sales"}
+    )
 
     assert response.status_code == 422
 
@@ -116,6 +124,7 @@ def test_search_route_hides_internal_errors():
         response = client.post(
             "/api/v1/search",
             json={"query": "What is the Q3 price?", "top_k": 5},
+            headers={"X-User-Role": "sales"},
         )
     finally:
         client.close()

@@ -123,11 +123,6 @@ audio/reference pairs before making a production model decision. For a fast
 development default use `base` or `small`; for the best measured accuracy on
 this set use `large-v3`.
 
-The separate `scripts\evaluate_summre.py` benchmark is optional. It evaluates
-ASR on the public SUMM-RE corpus and should not replace this project-specific
-benchmark because its individual speaker-track references can include long
-silences and dataset-specific annotations.
-
 For PDF results, these fields are `null`. The current values describe the
 indexed audio document range; turn-level citations can be added later with a
 turn-aware splitter.
@@ -309,31 +304,6 @@ uv run python scripts\evaluate_transcription_dataset.py `
 The report contains per-file results and weighted WER/CER summaries in
 `benchmark.json`, `benchmark.csv`, and `benchmark.md`. Speaker labels such as
 `[Speaker 1]` in the references are ignored when calculating the error rates.
-
-### SUMM-RE French meeting ASR evaluation
-
-SUMM-RE provides manually transcribed and aligned `dev` and `test` audio tracks,
-so it can benchmark French ASR with WER, CER, runtime, and real-time factor. Run
-a small, streaming sample first:
-
-```powershell
-uv run python scripts\evaluate_summre.py `
-  --split dev `
-  --limit 3 `
-  --models small `
-  --output-dir reports\transcription\summ-re-dev
-```
-
-The script reports metrics only and removes temporary audio when it finishes.
-The full `dev` split has 130 speaker tracks and is about 14 GB; `test` has 124
-tracks and is also about 14 GB. Streaming avoids downloading other splits, but
-the selected split's parquet shards can still require substantial transfer.
-Use `--limit` to begin with a few tracks. The released Hugging Face extract has
-transcripts but no gold meeting summaries, so it evaluates ASR, not RAG answer
-quality or summary faithfulness. The dataset is licensed CC BY-SA 4.0; retain
-the attribution in generated reports and any redistributed results:
-[SUMM-RE dataset card](https://huggingface.co/datasets/linagora/SUMM-RE),
-[Hunter et al. (2024)](https://aclanthology.org/2024.jeptalnrecital-taln.35/).
 
 ### RAG retrieval evaluation
 

@@ -8,7 +8,9 @@ class LocalOllamaJudge(DeepEvalBaseLLM):
     def __init__(self, model_name: str = "llama3"):
         self.model_name = model_name
         # Temperature 0 is critical for a Judge LLM so its grading is deterministic
-        self.model = ChatOllama(model=model_name, temperature=0.0)
+        # DeepEval parses a JSON object from judge responses. Constrained JSON
+        # generation prevents the local model from replying with free-form text.
+        self.model = ChatOllama(model=model_name, temperature=0.0, format="json")
 
     def load_model(self):
         return self.model
