@@ -105,6 +105,34 @@ class LocalSearchEngine:
         self.retriever.search_kwargs = search_kwargs
         initial_parent_results = self.retriever.invoke(query)
 
+        # Table questions often require a global scan (all rows, maximum,
+        # minimum, ranking). Semantic retrieval can otherwise select a
+        # smaller table that happens to contain the queried words. When a
+        # complete table is retrieved, include the other complete tables from
+        # the same document so the generator can compare the full evidence.
+        if self._is_global_table_query(query):
+            existing_ids = {doc.metadata.get("table_id") for doc in initial_parent_results}
+            for key in self.docstore.yield_keys():
+                stored = self.docstore.mget([key])[0]
+                if not stored or stored.metadata.get("content_kind") != "table":
+                    continue
+                if not stored.metadata.get("table_complete"):
+                    continue
+                if user_role and user_role not in stored.metadata.get("allowed_roles", []):
+                    continue
+                if source and stored.metadata.get("source") not in (
+                    [source] if isinstance(source, str) else source
+                ):
+                    continue
+                if document_ids and stored.metadata.get("document_id") not in (
+                    [document_ids] if isinstance(document_ids, str) else document_ids
+                ):
+                    continue
+                table_id = stored.metadata.get("table_id")
+                if table_id not in existing_ids:
+                    initial_parent_results.append(stored)
+                    existing_ids.add(table_id)
+
         if len(initial_parent_results) <= top_k:
             return initial_parent_results
 
@@ -121,7 +149,28 @@ class LocalSearchEngine:
             key=lambda x: x.metadata["rerank_score"],
             reverse=True,
         )
+        if self._is_global_table_query(query):
+            table_results = [
+                doc for doc in reranked_results
+                if doc.metadata.get("content_kind") == "table"
+                and doc.metadata.get("table_complete")
+            ]
+            other_results = [
+                doc for doc in reranked_results
+                if doc.metadata.get("content_kind") != "table"
+            ]
+            return (table_results + other_results)[: max(top_k, len(table_results))]
         return reranked_results[:top_k]
+
+    @staticmethod
+    def _is_global_table_query(query: str) -> bool:
+        terms = (
+            "tous", "toutes", "chaque", "maximum", "minimum", "plus cher",
+            "moins cher", "classe", "classer", "comparer", "total", "liste",
+            "all", "every", "maximum", "minimum", "highest", "lowest", "rank",
+        )
+        normalized = query.lower()
+        return any(term in normalized for term in terms)
 
     def list_documents(self) -> list[dict[str, str]]:
         return list_indexed_documents(self.client, self.collection_name)
