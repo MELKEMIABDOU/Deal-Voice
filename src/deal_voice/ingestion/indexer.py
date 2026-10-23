@@ -1,4 +1,6 @@
 import json
+import uuid
+from pathlib import Path
 from typing import Any
 from typing import List
 from langchain_classic.retrievers import ParentDocumentRetriever
@@ -10,6 +12,120 @@ from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient, models
 from deal_voice.config import settings
 from deal_voice.ingestion.qdrant_schema import ensure_collection_schema
+
+
+def list_indexed_documents(client: QdrantClient, collection_name: str) -> list[dict[str, str]]:
+    points, _ = client.scroll(
+        collection_name=collection_name, limit=10000,
+        with_payload=True, with_vectors=False,
+    )
+    documents: dict[str, dict[str, str]] = {}
+    for point in points:
+        metadata = (point.payload or {}).get("metadata", {})
+        document_id = metadata.get("document_id")
+        if document_id:
+            documents[document_id] = {
+                "document_id": document_id,
+                "source": str(metadata.get("source", "inconnu")),
+                "file_type": str(metadata.get("file_type", "document")),
+            }
+    return list(documents.values())
+
+
+def migrate_legacy_documents(client: QdrantClient, docstore: Any, collection_name: str) -> int:
+    """Assign stable IDs to pre-ID Qdrant points and matching parent records.
+
+    Legacy chunks are grouped by source filename because older index versions
+    did not persist an upload ID. Files with the same legacy source therefore
+    cannot be distinguished retroactively.
+    """
+    grouped_points: dict[str, list[Any]] = {}
+    offset = None
+    while True:
+        points, offset = client.scroll(
+            collection_name=collection_name,
+            offset=offset,
+            limit=1000,
+            with_payload=True,
+            with_vectors=False,
+        )
+        for point in points:
+            payload = point.payload or {}
+            metadata = payload.get("metadata", {})
+            if metadata.get("document_id"):
+                continue
+            source = str(metadata.get("source") or "unknown")
+            grouped_points.setdefault(source, []).append(point)
+        if offset is None:
+            break
+
+    for source, points in grouped_points.items():
+        document_id = str(
+            uuid.uuid5(uuid.NAMESPACE_URL, f"deal-voice-legacy:{collection_name}:{source}")
+        )
+        parent_ids: set[str] = set()
+        for point in points:
+            payload = dict(point.payload or {})
+            metadata = dict(payload.get("metadata", {}))
+            metadata["document_id"] = document_id
+            payload["metadata"] = metadata
+            client.set_payload(
+                collection_name=collection_name,
+                payload=payload,
+                points=[point.id],
+            )
+            if metadata.get("doc_id"):
+                parent_ids.add(str(metadata["doc_id"]))
+        for parent_id in parent_ids:
+            stored = docstore.mget([parent_id])
+            if stored and stored[0]:
+                stored[0].metadata["document_id"] = document_id
+                docstore.mset([(parent_id, stored[0])])
+    return len(grouped_points)
+
+
+def delete_indexed_documents(
+    client: QdrantClient, docstore: Any, collection_name: str,
+    document_ids: List[str],
+) -> None:
+    if not document_ids:
+        return
+    condition = models.FieldCondition(
+        key="metadata.document_id", match=models.MatchAny(any=document_ids),
+    )
+    points, _ = client.scroll(
+        collection_name=collection_name,
+        scroll_filter=models.Filter(must=[condition]),
+        limit=10000, with_payload=True, with_vectors=False,
+    )
+    parent_keys: set[str] = set()
+    paths: set[Path] = set()
+    for point in points:
+        metadata = (point.payload or {}).get("metadata", {})
+        if metadata.get("doc_id"):
+            parent_keys.add(str(metadata["doc_id"]))
+        for field in ("original_path", "transcript_markdown", "transcript_json"):
+            if metadata.get(field):
+                paths.add(Path(metadata[field]))
+    for key in docstore.yield_keys():
+        stored = docstore.mget([key])
+        if stored and stored[0] and stored[0].metadata.get("document_id") in document_ids:
+            parent_keys.add(key)
+            for field in ("original_path", "transcript_markdown", "transcript_json"):
+                if stored[0].metadata.get(field):
+                    paths.add(Path(stored[0].metadata[field]))
+    client.delete(
+        collection_name=collection_name,
+        points_selector=models.FilterSelector(filter=models.Filter(must=[condition])),
+    )
+    if parent_keys:
+        docstore.mdelete(list(parent_keys))
+    for path in paths:
+        try:
+            path.unlink(missing_ok=True)
+            path.parent.rmdir()
+        except OSError:
+            pass
 
 
 class EnterpriseIndexer:
@@ -48,6 +164,7 @@ class EnterpriseIndexer:
                 **json.loads(bytes_data.decode("utf-8"))
             ),
         )
+        self.parent_store = fs
 
         self.parent_splitter = RecursiveCharacterTextSplitter(
             chunk_size=settings.parent_chunk_size,
@@ -66,6 +183,8 @@ class EnterpriseIndexer:
         )
 
     def index_documents(self, documents: List[Document]):
+        for document in documents:
+            document.metadata.setdefault("document_id", str(uuid.uuid4()))
         audio_documents = []
         for document in documents:
             if document.metadata.get("file_type") == "audio":
@@ -140,20 +259,25 @@ class EnterpriseIndexer:
         add_parent(current)
         return parents
 
+    def list_documents(self) -> list[dict[str, str]]:
+        """Return unique indexed documents for the local management UI."""
+        return list_indexed_documents(self.client, self.collection_name)
+
+    def migrate_legacy_documents(self) -> int:
+        """Migrate legacy entries without deleting indexed content."""
+        return migrate_legacy_documents(
+            self.client, self.docstore, self.collection_name
+        )
+
+    def delete_documents(self, document_ids: List[str]) -> None:
+        """Remove vectors, parent records, originals, and transcript artifacts."""
+        delete_indexed_documents(
+            self.client, self.docstore, self.collection_name, document_ids
+        )
+
     def delete_sources(self, sources: List[str]) -> None:
-        """Delete indexed vectors belonging to the given source names."""
+        """Compatibility helper; source names may match more than one document."""
         if not sources:
             return
-        self.client.delete(
-            collection_name=self.collection_name,
-            points_selector=models.FilterSelector(
-                filter=models.Filter(
-                    must=[
-                        models.FieldCondition(
-                            key="metadata.source",
-                            match=models.MatchAny(any=sources),
-                        )
-                    ]
-                )
-            ),
-        )
+        matched = [doc["document_id"] for doc in self.list_documents() if doc["source"] in sources]
+        self.delete_documents(matched)

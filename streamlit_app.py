@@ -1,6 +1,8 @@
 """Interactive Streamlit client for the Deal-Voice RAG pipeline."""
 
 import atexit
+import shutil
+import uuid
 from typing import Any
 from pathlib import Path
 
@@ -15,7 +17,7 @@ from deal_voice.ingestion.indexer import EnterpriseIndexer
 from deal_voice.retrieval.search import LocalSearchEngine
 
 
-st.set_page_config(
+st.set_page_config (
     page_title="Deal-Voice RAG",
     page_icon="🎙️",
     layout="wide",
@@ -62,60 +64,91 @@ def render_source(document: Document, index: int) -> None:
 
 
 def index_uploaded_files(uploaded_files: list[Any], whisper_model: str) -> list[str]:
-    """Persist and index multiple uploaded PDF or audio files."""
-    upload_dir = Path("data") / "raw"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    documents: list[Document] = []
-    indexed_names: list[str] = []
+    """Persist and index uploads, rolling back files and vectors on failure."""
+    if len(uploaded_files) > settings.max_upload_files:
+        raise ValueError(f"Maximum {settings.max_upload_files} fichiers par import.")
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
+    for item in uploaded_files:
+        if item.size > max_bytes:
+            raise ValueError(
+                f"{item.name} dépasse la limite de {settings.max_upload_size_mb} Mo."
+            )
 
-    for uploaded_file in uploaded_files:
-        file_path = upload_dir / Path(uploaded_file.name).name
-        file_path.write_bytes(uploaded_file.getbuffer())
-        suffix = file_path.suffix.lower()
-        if suffix == ".pdf":
-            documents.extend(
-                EnterpriseDocumentParser(default_roles=[]).parse_pdf(
+    documents: list[Document] = []
+    document_ids: list[str] = []
+    indexer = None
+    try:
+        for uploaded_file in uploaded_files:
+            document_id = str(uuid.uuid4())
+            document_ids.append(document_id)
+            file_path = Path("data") / "raw" / document_id / Path(uploaded_file.name).name
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_bytes(uploaded_file.getbuffer())
+            suffix = file_path.suffix.lower()
+
+            if suffix == ".pdf":
+                parsed = EnterpriseDocumentParser(default_roles=[]).parse_pdf(
                     file_path, allowed_roles=None
                 )
-            )
-        elif suffix in {".mp3", ".wav", ".m4a", ".flac"}:
-            if not settings.hf_token:
-                raise ValueError(
-                    "HF_TOKEN est nécessaire pour la diarisation audio. "
-                    "Ajoutez-le dans .env avant l'upload."
-                )
-            document = WhisperXTranscriber(
-                model_name=whisper_model,
-                device="cpu",
-                compute_type="int8",
-                language="fr",
-            ).transcribe_to_document(
-                file_path,
-                hf_token=settings.hf_token,
-                output_dir=Path("data") / "processed",
-            )
-            documents.append(document)
-        else:
-            raise ValueError(
-                "Format non supporté. Utilisez PDF, MP3, WAV, M4A ou FLAC."
-            )
-        indexed_names.append(file_path.name)
+                for document in parsed:
+                    document.metadata.update(
+                        {"document_id": document_id, "original_path": str(file_path)}
+                    )
+                documents.extend(parsed)
+            elif suffix in {".mp3", ".wav", ".m4a", ".flac"}:
+                import torchaudio
 
-    indexer = EnterpriseIndexer()
-    try:
-        indexer.delete_sources(indexed_names)
+                audio_info = torchaudio.info(str(file_path))
+                duration_minutes = audio_info.num_frames / audio_info.sample_rate / 60
+                if duration_minutes > settings.max_audio_duration_minutes:
+                    raise ValueError(
+                        f"{uploaded_file.name} dépasse la durée maximale de "
+                        f"{settings.max_audio_duration_minutes} minutes."
+                    )
+                if not settings.hf_token:
+                    raise ValueError(
+                        "HF_TOKEN est nécessaire pour la diarisation audio. "
+                        "Ajoutez-le dans .env avant l'upload."
+                    )
+                document = WhisperXTranscriber(
+                    model_name=whisper_model,
+                    device="cpu",
+                    compute_type="int8",
+                    language="fr",
+                ).transcribe_to_document(
+                    file_path,
+                    hf_token=settings.hf_token,
+                    output_dir=Path("data") / "processed" / document_id,
+                )
+                document.metadata.update(
+                    {"document_id": document_id, "original_path": str(file_path)}
+                )
+                documents.append(document)
+            else:
+                raise ValueError(
+                    "Format non supporté. Utilisez PDF, MP3, WAV, M4A ou FLAC."
+                )
+
+        indexer = EnterpriseIndexer()
         indexer.index_documents(documents)
+    except Exception:
+        if indexer is not None:
+            try:
+                indexer.delete_documents(document_ids)
+            except Exception:
+                pass
+        for document_id in document_ids:
+            shutil.rmtree(Path("data") / "raw" / document_id, ignore_errors=True)
+            shutil.rmtree(Path("data") / "processed" / document_id, ignore_errors=True)
+        raise
     finally:
-        indexer.client.close()
-    return indexed_names
+        if indexer is not None:
+            indexer.client.close()
+    return document_ids
 
 
 def main() -> None:
-    st.session_state.setdefault("uploaded_sources", [])
-    st.session_state.setdefault("selected_sources", [])
-    pending_sources = st.session_state.pop("pending_sources", None)
-    if pending_sources is not None:
-        st.session_state["selected_sources"] = pending_sources
+    st.session_state.setdefault("selected_documents", [])
 
     st.title("🎙️ Deal-Voice")
     st.subheader("Multimodal RAG pour appels commerciaux, réunions et documents")
@@ -138,17 +171,21 @@ def main() -> None:
             value=5,
             help="Nombre maximal de chunks parents envoyés au LLM.",
         )
-        role_options = ["Aucun filtre"] + settings.default_roles
-        selected_role = st.selectbox("Filtre de rôle", role_options)
-        user_role = None if selected_role == "Aucun filtre" else selected_role
-        source_options = st.session_state["uploaded_sources"]
-        selected_sources = st.multiselect(
+        user_role = None
+        if settings.rbac_enabled:
+            role_options = ["Aucun filtre"] + settings.default_roles
+            selected_role = st.selectbox("Filtre de rôle", role_options)
+            user_role = None if selected_role == "Aucun filtre" else selected_role
+        search_engine = load_search_engine()
+        available_documents = search_engine.list_documents()
+        labels = {doc["document_id"]: doc["source"] for doc in available_documents}
+        selected_ids = st.multiselect(
             "Documents à interroger",
-            source_options,
-            key="selected_sources",
-            help="La liste contient uniquement les fichiers uploadés dans cette session.",
+            list(labels),
+            format_func=lambda doc_id: labels.get(doc_id, doc_id),
+            key="selected_documents",
+            help="Les fichiers de même nom restent identifiés séparément.",
         )
-        source = selected_sources
         whisper_model = st.selectbox(
             "Modèle WhisperX",
             ["tiny", "base", "small"],
@@ -157,6 +194,18 @@ def main() -> None:
         )
 
         st.divider()
+        if st.button("Migrer les documents historiques sans ID"):
+            migrated_count = search_engine.migrate_legacy_documents()
+            st.success(
+                f"Migration terminée : {migrated_count} document(s) ancien(s) identifié(s)."
+            )
+            st.rerun()
+        if selected_ids and st.button("Supprimer les documents sélectionnés"):
+            ids_to_delete = selected_ids
+            search_engine.delete_documents(ids_to_delete)
+            st.session_state["selected_documents"] = []
+            st.success(f"{len(ids_to_delete)} document(s) supprimé(s).")
+            st.rerun()
         st.markdown("**Préparation locale**")
         st.code("ollama serve\nollama pull <nom-du-modele>")
 
@@ -174,13 +223,8 @@ def main() -> None:
             st.cache_resource.clear()
             with st.spinner("Ingestion et indexation en cours..."):
                 indexed_names = index_uploaded_files(uploaded_files, whisper_model)
-            st.session_state["uploaded_sources"] = sorted(
-                set(st.session_state["uploaded_sources"]).union(indexed_names)
-            )
-            st.session_state["pending_sources"] = indexed_names
             st.success(
-                f"{len(indexed_names)} fichier(s) indexé(s) : "
-                + ", ".join(indexed_names)
+                f"{len(indexed_names)} fichier(s) indexé(s)."
             )
             st.rerun()
         except Exception as exc:
@@ -204,7 +248,7 @@ def main() -> None:
         if not model_name:
             st.error("Le nom du modèle Ollama est obligatoire.")
             return
-        if not selected_sources:
+        if not selected_ids:
             st.warning(
                 "Sélectionnez au moins un fichier uploadé dans "
                 "'Documents à interroger'."
@@ -217,7 +261,7 @@ def main() -> None:
             documents = search_engine.search(
                 query=query.strip(),
                 user_role=user_role,
-                source=source,
+                document_ids=selected_ids,
                 top_k=top_k,
             )
             answer = generator.generate(

@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     qdrant_storage_path: str = "./local_qdrant_db"
     collection_name: str = "enterprise_knowledge"
     allow_destructive_schema_migration: bool = False
+    max_upload_size_mb: int = 100
+    max_upload_files: int = 5
+    max_audio_duration_minutes: int = 120
 
     # Modèles multilingues pour les contenus et requêtes en français
     embedding_model_name: str = "BAAI/bge-m3"
@@ -20,6 +23,7 @@ class Settings(BaseSettings):
     child_chunk_overlap: int = 50
 
     # Sécurité & RBAC
+    rbac_enabled: bool = False
     default_roles: List[str] = ["sales", "admin", "executive", "intern", "guest"]
 
     # Modèle LLM Ollama

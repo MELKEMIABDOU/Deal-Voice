@@ -10,6 +10,11 @@ from langchain_classic.storage import LocalFileStore, EncoderBackedStore
 from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
 from deal_voice.config import settings
 from deal_voice.ingestion.qdrant_schema import ensure_collection_schema
+from deal_voice.ingestion.indexer import (
+    delete_indexed_documents,
+    list_indexed_documents,
+    migrate_legacy_documents as migrate_legacy_index_entries,
+)
 
 
 class LocalSearchEngine:
@@ -64,6 +69,7 @@ class LocalSearchEngine:
         query: str,
         user_role: str | None = None,
         source: str | list[str] | None = None,
+        document_ids: str | list[str] | None = None,
         top_k: int = 5,
     ) -> List[Document]:
         search_kwargs: dict[str, object] = {"k": 30}
@@ -81,6 +87,14 @@ class LocalSearchEngine:
                 models.FieldCondition(
                     key="metadata.source",
                     match=models.MatchAny(any=source_values),
+                )
+            )
+        if document_ids:
+            ids = [document_ids] if isinstance(document_ids, str) else document_ids
+            conditions.append(
+                models.FieldCondition(
+                    key="metadata.document_id",
+                    match=models.MatchAny(any=ids),
                 )
             )
         if conditions:
@@ -108,3 +122,16 @@ class LocalSearchEngine:
             reverse=True,
         )
         return reranked_results[:top_k]
+
+    def list_documents(self) -> list[dict[str, str]]:
+        return list_indexed_documents(self.client, self.collection_name)
+
+    def delete_documents(self, document_ids: list[str]) -> None:
+        delete_indexed_documents(
+            self.client, self.docstore, self.collection_name, document_ids
+        )
+
+    def migrate_legacy_documents(self) -> int:
+        return migrate_legacy_index_entries(
+            self.client, self.docstore, self.collection_name
+        )

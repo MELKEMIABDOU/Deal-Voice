@@ -57,12 +57,18 @@ class ChunkResponse(BaseModel):
 
 class QueryResponse(BaseModel):
     query: str
-    authorized_role: str
+    authorized_role: Optional[str] = None
     answer: str
     retrieved_chunks: List[ChunkResponse]
 
 
-def get_current_user_role(x_user_role: str = Header(default="guest")) -> str:
+def get_current_user_role(x_user_role: str | None = Header(default=None)) -> str | None:
+    if not settings.rbac_enabled:
+        return None
+    if x_user_role is None:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN, detail="Rôle utilisateur requis."
+        )
     role = x_user_role.lower()
     if role not in settings.default_roles:
         raise HTTPException(
