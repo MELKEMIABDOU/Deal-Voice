@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from langchain_core.documents import Document
+
+from deal_voice.evaluation.question_set import normalize_text, source_matches
 
 
 @dataclass
@@ -14,6 +16,8 @@ class RetrievalEvaluation:
 
     question_id: str
     expected_source: str
+    expected_sources_found: list[str]
+    expected_sources_missing: list[str]
     retrieved_sources: list[str]
     source_hit: bool
     expected_facts_found: list[str]
@@ -24,6 +28,11 @@ class RetrievalEvaluation:
     def fact_recall(self) -> float:
         total = len(self.expected_facts_found) + len(self.expected_facts_missing)
         return len(self.expected_facts_found) / total if total else 1.0
+
+    @property
+    def source_recall(self) -> float:
+        total = len(self.expected_sources_found) + len(self.expected_sources_missing)
+        return len(self.expected_sources_found) / total if total else 1.0
 
     @property
     def reciprocal_rank(self) -> float:
@@ -38,50 +47,64 @@ class RetrievalEvaluation:
     def precision_at_k(self) -> float:
         if not self.retrieved_sources:
             return 0.0
+        expected_sources = self.expected_sources_found + self.expected_sources_missing
         return sum(
-            source == self.expected_source for source in self.retrieved_sources
+            any(source_matches(expected, source) for expected in expected_sources)
+            for source in self.retrieved_sources
         ) / len(self.retrieved_sources)
 
 
 def evaluate_retrieval(
     question_id: str,
-    expected_source: str,
+    expected_source: str | Iterable[str],
     expected_facts: Iterable[str],
     documents: list[Document],
     expected_fact_variants: dict[str, list[str]] | None = None,
 ) -> RetrievalEvaluation:
     """Score source retrieval and controlled-variant fact coverage."""
-    contents = "\n".join(document.page_content.lower() for document in documents)
+    contents = normalize_text(
+        "\n".join(document.page_content for document in documents)
+    )
     facts = list(expected_facts)
     variants = expected_fact_variants or {}
     found = [
         fact
         for fact in facts
         if any(
-            variant.lower() in contents
+            bool(normalize_text(variant))
+            and f" {normalize_text(variant)} " in f" {contents} "
             for variant in [fact, *variants.get(fact, [])]
         )
     ]
     missing = [fact for fact in facts if fact not in found]
-    sources = [
-        str(document.metadata.get("source", ""))
-        for document in documents
+    sources = [str(document.metadata.get("source", "")) for document in documents]
+    expected_sources = (
+        [expected_source] if isinstance(expected_source, str) else list(expected_source)
+    )
+    sources_found = [
+        expected
+        for expected in expected_sources
+        if any(source_matches(expected, actual) for actual in sources)
     ]
+    sources_missing = [
+        expected for expected in expected_sources if expected not in sources_found
+    ]
+    rank = next(
+        (
+            index
+            for index, actual in enumerate(sources, start=1)
+            if any(source_matches(expected, actual) for expected in expected_sources)
+        ),
+        None,
+    )
     return RetrievalEvaluation(
         question_id=question_id,
-        expected_source=expected_source,
+        expected_source=", ".join(expected_sources),
+        expected_sources_found=sources_found,
+        expected_sources_missing=sources_missing,
         retrieved_sources=sources,
-        source_hit=expected_source in sources,
+        source_hit=bool(sources_found),
         expected_facts_found=found,
         expected_facts_missing=missing,
-        expected_source_rank=(
-            next(
-                (
-                    index
-                    for index, source in enumerate(sources, start=1)
-                    if source == expected_source
-                ),
-                None,
-            )
-        ),
+        expected_source_rank=rank,
     )

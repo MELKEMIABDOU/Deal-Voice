@@ -1,3 +1,5 @@
+import shutil
+
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
@@ -27,6 +29,60 @@ class FixedEmbeddings(Embeddings):
 class UnusedReranker:
     def __init__(self, model_name):
         pass
+
+
+def test_stopped_database_and_artifacts_can_be_backed_up_and_restored(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(indexer_module, "HuggingFaceEmbeddings", FixedEmbeddings)
+    monkeypatch.setattr(search_module, "HuggingFaceEmbeddings", FixedEmbeddings)
+    live = tmp_path / "live"
+    raw = live / "data" / "raw" / "upload"
+    processed = live / "data" / "processed" / "upload"
+    raw.mkdir(parents=True)
+    processed.mkdir(parents=True)
+    (raw / "call.wav").write_bytes(b"original audio bytes")
+    (processed / "call_transcript.md").write_text("A: Bonjour.", encoding="utf-8")
+    document = Document(
+        page_content="A: Bonjour.",
+        metadata={
+            "source": "call.wav",
+            "original_path": "data/raw/upload/call.wav",
+            "transcript_markdown": "data/processed/upload/call_transcript.md",
+        },
+    )
+    indexer = EnterpriseIndexer(
+        db_path=str(live / "local_qdrant_db"), collection_name="backup_test"
+    )
+    try:
+        indexer.index_documents([document])
+        expected_ids = [row["document_id"] for row in indexer.list_documents()]
+    finally:
+        indexer.client.close()  # Copy only after the owner has stopped.
+
+    backup = tmp_path / "backup"
+    restored = tmp_path / "restored"
+    for relative in ("local_qdrant_db", "data/raw", "data/processed"):
+        shutil.copytree(live / relative, backup / relative)
+        shutil.copytree(backup / relative, restored / relative)
+    monkeypatch.chdir(restored)
+    search = LocalSearchEngine(
+        db_path=str(restored / "local_qdrant_db"),
+        collection_name="backup_test",
+        use_reranker=False,
+    )
+    try:
+        assert [row["document_id"] for row in search.list_documents()] == expected_ids
+        results = search.search("Bonjour", top_k=1)
+        assert results[0].page_content == "A: Bonjour."
+        assert (
+            restored / results[0].metadata["original_path"]
+        ).read_bytes() == b"original audio bytes"
+        assert (restored / results[0].metadata["transcript_markdown"]).read_text(
+            encoding="utf-8"
+        ) == "A: Bonjour."
+    finally:
+        search.client.close()
 
 
 def test_qdrant_same_named_documents_can_be_deleted_independently(
@@ -75,7 +131,9 @@ def test_qdrant_same_named_documents_can_be_deleted_independently(
         search.client.close()
 
 
-def test_qdrant_legacy_document_migration_preserves_searchability(tmp_path, monkeypatch):
+def test_qdrant_legacy_document_migration_preserves_searchability(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr(indexer_module, "HuggingFaceEmbeddings", FixedEmbeddings)
     monkeypatch.setattr(search_module, "HuggingFaceEmbeddings", FixedEmbeddings)
     monkeypatch.setattr(search_module, "CrossEncoder", UnusedReranker)

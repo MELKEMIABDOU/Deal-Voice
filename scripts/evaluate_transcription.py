@@ -38,7 +38,9 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Human reference transcript used for WER/CER.",
     )
-    parser.add_argument("--output-dir", type=Path, default=Path("reports/transcription"))
+    parser.add_argument(
+        "--output-dir", type=Path, default=Path("reports/transcription")
+    )
     return parser.parse_args()
 
 
@@ -47,7 +49,9 @@ def write_reports(
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "benchmark.json").write_text(
-        json.dumps([result.to_dict() for result in results], ensure_ascii=False, indent=2),
+        json.dumps(
+            [result.to_dict() for result in results], ensure_ascii=False, indent=2
+        ),
         encoding="utf-8",
     )
     with (output_dir / "benchmark.csv").open("w", newline="", encoding="utf-8") as file:
@@ -68,9 +72,7 @@ def write_reports(
 def main() -> None:
     args = parse_args()
     reference_text = (
-        args.reference.read_text(encoding="utf-8")
-        if args.reference
-        else None
+        args.reference.read_text(encoding="utf-8") if args.reference else None
     )
     results = []
     for model_name in args.models:

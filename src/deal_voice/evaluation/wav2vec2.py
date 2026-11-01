@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Any
 
 from .transcription import (
     TranscriptionBenchmarkResult,
@@ -75,9 +74,9 @@ def benchmark_wav2vec2(
         compute_type="torch",
         duration_seconds=round(duration_seconds, 3),
         transcription_seconds=round(transcription_seconds, 3),
-        real_time_factor=round(
-            transcription_seconds / duration_seconds, 3
-        ) if duration_seconds else 0.0,
+        real_time_factor=round(transcription_seconds / duration_seconds, 3)
+        if duration_seconds
+        else 0.0,
         segment_count=1 if text else 0,
         word_count=len(words),
         character_count=len(text),

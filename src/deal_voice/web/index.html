@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Interrogez vos documents et échanges commerciaux avec DealVoice.">
+    <meta name="color-scheme" content="light">
+    <title>DealVoice · Votre espace documentaire</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#question">Aller à la question</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Documents et import">
+        <a class="brand" href="/" aria-label="DealVoice, accueil">
+          <span class="brand-mark" aria-hidden="true">dv<span></span></span>
+          <span>DealVoice<small>Votre espace documentaire</small></span>
+        </a>
+
+        <div class="section-heading">
+          <div><p class="eyebrow">VOTRE ESPACE</p><h1>Documents</h1></div>
+          <button id="refresh-documents" class="icon-button" type="button" title="Actualiser les documents" aria-label="Actualiser les documents">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 18 17"/></svg>
+          </button>
+        </div>
+
+        <label id="drop-zone" class="drop-zone" tabindex="0" role="button" for="file-input" aria-label="Ajouter des fichiers PDF ou audio">
+          <span class="upload-symbol" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 15V3m-4 4 4-4 4 4M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>
+          </span>
+          <strong>Ajouter des documents</strong>
+          <span>Glissez vos fichiers ou <span class="text-link">parcourez</span></span>
+          <small>PDF, MP3, WAV, M4A, FLAC</small>
+        </label>
+        <input id="file-input" class="visually-hidden" type="file" multiple accept=".pdf,.mp3,.wav,.m4a,.flac">
+        <p id="upload-limits" class="upload-limits">Jusqu’à 5 fichiers · 100 Mo par fichier</p>
+        <div id="upload-progress" class="upload-progress" hidden aria-live="polite">
+          <p id="upload-label"></p>
+          <progress id="upload-bar" max="100" aria-label="Progression du transfert"></progress>
+          <small id="upload-stage"></small>
+        </div>
+
+        <label class="search-field" for="document-filter">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+          <input id="document-filter" type="search" placeholder="Rechercher un document" autocomplete="off">
+        </label>
+        <div class="document-toolbar">
+          <label class="select-all"><input id="select-all" type="checkbox"><span>Tout sélectionner</span></label>
+          <button id="delete-documents" class="icon-button delete-button" type="button" disabled title="Supprimer les documents sélectionnés" aria-label="Supprimer les documents sélectionnés">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/></svg>
+          </button>
+        </div>
+        <div id="document-list" class="document-list" aria-label="Liste des documents"></div>
+        <p id="document-count" class="document-count" aria-live="polite">Chargement des documents…</p>
+
+        <div class="sidebar-footer">
+          <span id="connection-dot" class="connection-dot" aria-hidden="true"></span>
+          <div><span id="connection-label">Connexion en cours…</span><small id="model-label">Moteur documentaire</small></div>
+          <button id="retry-connection" class="text-button" type="button" hidden>Réessayer</button>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="workspace-header">
+          <div class="workspace-title"><span class="workspace-icon" aria-hidden="true">✦</span><div><strong>Assistant documentaire</strong><small>Appels, réunions et documents</small></div></div>
+          <div class="header-actions"><span class="pilot-badge">Espace pilote</span><button id="clear-conversation" class="text-button" type="button" disabled>Effacer les échanges</button></div>
+        </header>
+
+        <div id="notice" class="notice" role="status" hidden></div>
+        <div id="conversation-area" class="conversation-area">
+          <section id="welcome" class="welcome" aria-labelledby="welcome-title">
+            <div class="welcome-icon" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+            <p class="eyebrow">UNE QUESTION, UN POINT DE DÉPART</p>
+            <h2 id="welcome-title">Vos documents.<br>Des réponses, avec leurs sources.</h2>
+            <p class="welcome-description">Retrouvez une information dans un appel, explorez un rapport ou croisez vos documents. Sélectionnez vos fichiers, puis posez votre question.</p>
+            <div class="suggestions" aria-label="Exemples de questions">
+              <button class="suggestion" type="button" data-question="Quels sont les points importants de ce document ?"><span aria-hidden="true">↗</span><strong>Aller à l’essentiel</strong><small>Quels sont les points importants ?</small></button>
+              <button class="suggestion" type="button" data-question="Quelles actions ont été décidées pendant la réunion ?"><span aria-hidden="true">↗</span><strong>Retrouver une décision</strong><small>Quelles actions ont été décidées ?</small></button>
+              <button class="suggestion" type="button" data-question="Compare les informations sur ce sujet dans les documents sélectionnés."><span aria-hidden="true">↗</span><strong>Croiser les informations</strong><small>Comparer plusieurs documents</small></button>
+            </div>
+          </section>
+          <div id="messages" class="messages" role="log" aria-label="Conversation" aria-live="polite" aria-relevant="additions"></div>
+        </div>
+
+        <div class="composer-area">
+          <p id="selection-summary" class="selection-summary">Sélectionnez un document pour commencer.</p>
+          <form id="question-form" class="composer">
+            <label class="visually-hidden" for="question">Votre question sur les documents sélectionnés</label>
+            <textarea id="question" rows="2" maxlength="2000" placeholder="Posez votre question sur les documents sélectionnés…" disabled></textarea>
+            <div class="composer-bottom"><span id="composer-hint">Entrée pour envoyer · Maj + Entrée pour une nouvelle ligne</span><button id="send-question" type="submit" disabled><span>Envoyer</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></div>
+          </form>
+          <p class="assistant-disclaimer">Posez des questions autonomes. Les réponses peuvent contenir des erreurs : consultez les sources avant de prendre une décision.</p>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

@@ -139,9 +139,9 @@ def benchmark_model(
         compute_type=compute_type,
         duration_seconds=round(duration_seconds, 3),
         transcription_seconds=round(transcription_seconds, 3),
-        real_time_factor=round(
-            transcription_seconds / duration_seconds, 3
-        ) if duration_seconds else 0.0,
+        real_time_factor=round(transcription_seconds / duration_seconds, 3)
+        if duration_seconds
+        else 0.0,
         segment_count=len(segments),
         word_count=len(words),
         character_count=len(text),

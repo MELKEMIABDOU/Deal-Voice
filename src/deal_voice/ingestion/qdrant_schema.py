@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 
 from qdrant_client import QdrantClient, models
+
 from deal_voice.config import settings
 
 

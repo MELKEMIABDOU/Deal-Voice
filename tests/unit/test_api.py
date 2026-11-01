@@ -1,7 +1,9 @@
+from http import HTTPStatus
+
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
-from http import HTTPStatus
+
 from deal_voice.api.main import QueryRequest, get_current_user_role
 from deal_voice.config import settings
 

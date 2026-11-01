@@ -35,9 +35,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     reference_text = (
-        args.reference.read_text(encoding="utf-8")
-        if args.reference
-        else None
+        args.reference.read_text(encoding="utf-8") if args.reference else None
     )
 
     print(f"Benchmarking {args.model}...")

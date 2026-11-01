@@ -1,21 +1,22 @@
 """Interactive Streamlit client for the Deal-Voice RAG pipeline."""
 
 import atexit
-import shutil
+import hashlib
 import uuid
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import streamlit as st
 from langchain_core.documents import Document
 
 from deal_voice.config import settings
 from deal_voice.generation.generator import RAGGenerator
-from deal_voice.ingestion.audio import WhisperXTranscriber
-from deal_voice.ingestion.document import EnterpriseDocumentParser
-from deal_voice.ingestion.indexer import EnterpriseIndexer
+from deal_voice.ingestion.uploads import (
+    SUPPORTED_SUFFIXES,
+    cleanup_upload,
+    index_uploaded_batch,
+)
 from deal_voice.retrieval.search import LocalSearchEngine
-
 
 st.set_page_config(
     page_title="Deal-Voice RAG",
@@ -80,84 +81,33 @@ def index_uploaded_files(uploaded_files: list[Any], whisper_model: str) -> list[
             raise ValueError(
                 f"{item.name} dépasse la limite de {settings.max_upload_size_mb} Mo."
             )
+        if Path(item.name).suffix.lower() not in SUPPORTED_SUFFIXES:
+            raise ValueError(
+                "Format non supporté. Utilisez PDF, MP3, WAV, M4A ou FLAC."
+            )
 
-    documents: list[Document] = []
-    document_ids: list[str] = []
-    indexer = None
+    uploads: list[tuple[Path, str, str]] = []
+    uploaded_hashes: set[str] = set()
     try:
         for uploaded_file in uploaded_files:
+            upload_buffer = uploaded_file.getbuffer()
+            content_sha256 = hashlib.sha256(upload_buffer).hexdigest()
+            if content_sha256 in uploaded_hashes:
+                continue
+            uploaded_hashes.add(content_sha256)
             document_id = str(uuid.uuid4())
-            document_ids.append(document_id)
-            file_path = Path("data") / "raw" / document_id / Path(uploaded_file.name).name
+            file_path = (
+                Path("data") / "raw" / document_id / Path(uploaded_file.name).name
+            )
+            uploads.append((file_path, document_id, content_sha256))
             file_path.parent.mkdir(parents=True, exist_ok=True)
-            file_path.write_bytes(uploaded_file.getbuffer())
-            suffix = file_path.suffix.lower()
-
-            if suffix == ".pdf":
-                parsed = EnterpriseDocumentParser(default_roles=[]).parse_pdf(
-                    file_path, allowed_roles=None
-                )
-                for document in parsed:
-                    document.metadata.update(
-                        {"document_id": document_id, "original_path": str(file_path)}
-                    )
-                documents.extend(parsed)
-            elif suffix in {".mp3", ".wav", ".m4a", ".flac"}:
-                # Use WhisperX's FFmpeg-backed decoder.  torchaudio.info() has
-                # no usable MP3 backend in some Windows/PyTorch installations.
-                import whisperx
-
-                audio = whisperx.load_audio(str(file_path))
-                duration_minutes = len(audio) / 16_000 / 60
-                if duration_minutes > settings.max_audio_duration_minutes:
-                    raise ValueError(
-                        f"{uploaded_file.name} dépasse la durée maximale de "
-                        f"{settings.max_audio_duration_minutes} minutes."
-                    )
-                if not settings.hf_token:
-                    raise ValueError(
-                        "HF_TOKEN est nécessaire pour la diarisation audio. "
-                        "Ajoutez-le dans .env avant l'upload."
-                    )
-                document = WhisperXTranscriber(
-                    model_name=whisper_model,
-                    device="cpu",
-                    compute_type="int8",
-                    language="fr",
-                ).transcribe_to_document(
-                    file_path,
-                    hf_token=settings.hf_token,
-                    output_dir=Path("data") / "processed" / document_id,
-                )
-                document.metadata.update(
-                    {"document_id": document_id, "original_path": str(file_path)}
-                )
-                documents.append(document)
-            else:
-                raise ValueError(
-                    "Format non supporté. Utilisez PDF, MP3, WAV, M4A ou FLAC."
-                )
-
-        # Reuse Streamlit's cached local Qdrant client. Opening a second
-        # QdrantLocal client for the same folder triggers its file lock.
-        search_engine = load_search_engine()
-        indexer = EnterpriseIndexer(client=search_engine.client)
-        indexer.index_documents(documents)
+            file_path.write_bytes(upload_buffer)
     except Exception:
-        if indexer is not None:
-            try:
-                indexer.delete_documents(document_ids)
-            except Exception:
-                pass
-        for document_id in document_ids:
-            shutil.rmtree(Path("data") / "raw" / document_id, ignore_errors=True)
-            shutil.rmtree(Path("data") / "processed" / document_id, ignore_errors=True)
+        for _, document_id, _ in uploads:
+            cleanup_upload(document_id)
         raise
-    finally:
-        if indexer is not None:
-            if indexer is not None and indexer._owns_client:
-                indexer.client.close()
-    return document_ids
+    index_uploaded_batch(uploads, load_search_engine, whisper_model)
+    return [document_id for _, document_id, _ in uploads]
 
 
 def main() -> None:
@@ -207,12 +157,8 @@ def main() -> None:
             key="selected_documents",
             help="Les fichiers de même nom restent identifiés séparément.",
         )
-        whisper_model = st.selectbox(
-            "Modèle WhisperX",
-            ["tiny", "base", "small"],
-            index=1,
-            help="base/small peuvent améliorer le français, mais sont plus lents.",
-        )
+        whisper_model = "medium"
+        st.caption("Transcription WhisperX : medium · français · CPU int8")
 
         st.divider()
         if st.button("Migrer les documents historiques sans ID"):
@@ -245,9 +191,7 @@ def main() -> None:
                 indexed_names = index_uploaded_files(uploaded_files, whisper_model)
             # Select these uploads after the rerun, before the widget is built.
             st.session_state["pending_selected_documents"] = indexed_names
-            st.success(
-                f"{len(indexed_names)} fichier(s) indexé(s)."
-            )
+            st.success(f"{len(indexed_names)} fichier(s) indexé(s).")
             st.rerun()
         except Exception as exc:
             st.error("L'indexation a échoué. Vérifiez le fichier et la configuration.")

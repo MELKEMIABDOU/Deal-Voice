@@ -1,10 +1,11 @@
 """Audio transcription, diarization, and chunk-ready document formatting."""
 
-import logging
+import gc
 import json
+import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, ClassVar
 
 from langchain_core.documents import Document
 
@@ -26,7 +27,7 @@ class CallTurn:
         self.start_time = start_time
         self.end_time = end_time
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "speaker": self.speaker,
             "text": self.text,
@@ -38,16 +39,16 @@ class CallTurn:
 class AudioTranscriptParser:
     """Converts raw diarized call data into structured Markdown."""
 
-    SPEAKER_MAP = {0: "Agent", 1: "Customer"}
+    SPEAKER_MAP: ClassVar[dict[int, str]] = {0: "Agent", 1: "Customer"}
 
     # ── Deepgram JSON ────────────────────────────────────────────────
     @staticmethod
-    def parse_deepgram_json(json_data: Dict[str, Any]) -> List[CallTurn]:
+    def parse_deepgram_json(json_data: dict[str, Any]) -> list[CallTurn]:
         """
         Parses Deepgram's diarization output:
         results.channels[0].alternatives[0].paragraphs.paragraphs
         """
-        turns: List[CallTurn] = []
+        turns: list[CallTurn] = []
         try:
             paragraphs = (
                 json_data.get("results", {})
@@ -73,18 +74,18 @@ class AudioTranscriptParser:
                         )
                     )
         except (IndexError, KeyError) as exc:
-            print(f"[AudioParser] Error parsing Deepgram JSON: {exc}")
+            logger.warning("Error parsing Deepgram JSON: %s", exc)
         return turns
 
     # ── Plain text transcript ────────────────────────────────────────
     @staticmethod
-    def parse_text_transcript(raw_text: str) -> List[CallTurn]:
+    def parse_text_transcript(raw_text: str) -> list[CallTurn]:
         """
         Parses simple text transcripts formatted as:
             Agent: Hello, how can I help?
             Customer: I need pricing info.
         """
-        turns: List[CallTurn] = []
+        turns: list[CallTurn] = []
         prefixes = {
             "agent:": "Agent",
             "rep:": "Agent",
@@ -101,7 +102,9 @@ class AudioTranscriptParser:
             matched = False
             for prefix, role in prefixes.items():
                 if line.lower().startswith(prefix):
-                    turns.append(CallTurn(speaker=role, text=line[len(prefix):].strip()))
+                    turns.append(
+                        CallTurn(speaker=role, text=line[len(prefix) :].strip())
+                    )
                     matched = True
                     break
 
@@ -117,10 +120,10 @@ class AudioTranscriptParser:
     # ── Markdown formatter ───────────────────────────────────────────
     @staticmethod
     def turns_to_markdown(
-        turns: List[CallTurn], include_timestamps: bool = True
+        turns: list[CallTurn], include_timestamps: bool = True
     ) -> str:
         """Formats call turns into clean Markdown dialogue blocks."""
-        lines: List[str] = []
+        lines: list[str] = []
         for turn in turns:
             ts = ""
             if include_timestamps and turn.start_time is not None:
@@ -130,25 +133,35 @@ class AudioTranscriptParser:
         return "\n\n".join(lines)
 
 
+class AudioDurationLimitError(ValueError):
+    """Decoded audio exceeds the configured limit before model loading."""
+
+
 class WhisperXTranscriber:
     """Transcribes audio, assigns speakers, and returns chunk-ready documents."""
 
     def __init__(
         self,
-        model_name: str = "base",
+        model_name: str = "medium",
         device: str = "cpu",
         compute_type: str = "int8",
         language: str | None = None,
-        batch_size: int = 4,
+        batch_size: int = 1,
+        max_audio_duration_minutes: float | None = None,
+        worker_timeout_seconds: float = 3600,
+        worker_cpu_threads: int = 2,
     ):
         self.model_name = model_name
         self.device = device
         self.compute_type = compute_type
         self.language = language
         self.batch_size = batch_size
+        self.max_audio_duration_minutes = max_audio_duration_minutes
+        self.worker_timeout_seconds = worker_timeout_seconds
+        self.worker_cpu_threads = worker_cpu_threads
 
     @staticmethod
-    def _serialize_turn(turn: CallTurn) -> Dict[str, Any]:
+    def _serialize_turn(turn: CallTurn) -> dict[str, Any]:
         """Serialize CallTurn objects and compatible diarization test doubles."""
         to_dict = getattr(turn, "to_dict", None)
         if callable(to_dict):
@@ -164,8 +177,36 @@ class WhisperXTranscriber:
         self,
         audio_path: str | Path,
         hf_token: str,
-    ) -> List[CallTurn]:
-        """Run WhisperX transcription and pyannote speaker diarization."""
+    ) -> list[CallTurn]:
+        """Run audio models in a separate process and wait for its termination."""
+        from deal_voice.ingestion.audio_worker import run_audio_worker
+
+        if not hf_token.strip():
+            raise ValueError("A Hugging Face token is required for diarization.")
+        turns = run_audio_worker(
+            Path(audio_path),
+            hf_token=hf_token,
+            model_name=self.model_name,
+            device=self.device,
+            compute_type=self.compute_type,
+            language=self.language,
+            batch_size=self.batch_size,
+            max_duration_seconds=self.max_audio_duration_minutes * 60
+            if self.max_audio_duration_minutes is not None
+            else None,
+            timeout_seconds=self.worker_timeout_seconds,
+            cpu_threads=self.worker_cpu_threads,
+        )
+        return [CallTurn(**turn) for turn in turns]
+
+    def _transcribe_and_diarize_in_process(
+        self,
+        audio_path: str | Path,
+        hf_token: str,
+        *,
+        max_duration_seconds: float | None = None,
+    ) -> list[CallTurn]:
+        """Worker implementation; application callers use the isolated method."""
         path = Path(audio_path)
         if not path.is_file():
             raise FileNotFoundError(f"Audio file not found: {path}")
@@ -173,20 +214,29 @@ class WhisperXTranscriber:
             raise ValueError("A Hugging Face token is required for diarization.")
 
         import whisperx
-        from whisperx.diarize import DiarizationPipeline
 
         audio = whisperx.load_audio(str(path))
+        if (
+            max_duration_seconds is not None
+            and len(audio) / 16_000 > max_duration_seconds
+        ):
+            raise AudioDurationLimitError(
+                "Audio exceeds its configured duration limit."
+            )
         model = whisperx.load_model(
             self.model_name,
             device=self.device,
             compute_type=self.compute_type,
             language=self.language,
+            threads=self.worker_cpu_threads,
         )
-        result = model.transcribe(
-            audio,
-            batch_size=self.batch_size,
-            language=self.language,
-        )
+        try:
+            result = model.transcribe(
+                audio, batch_size=self.batch_size, language=self.language
+            )
+        finally:
+            del model
+            self._release_model_memory()
 
         language = result.get("language") or self.language
         if not language:
@@ -196,28 +246,47 @@ class WhisperXTranscriber:
             language_code=language,
             device=self.device,
         )
-        result = whisperx.align(
-            result["segments"],
-            align_model,
-            align_metadata,
-            audio,
-            self.device,
-            return_char_alignments=False,
-        )
+        try:
+            result = whisperx.align(
+                result["segments"],
+                align_model,
+                align_metadata,
+                audio,
+                self.device,
+                return_char_alignments=False,
+            )
+        finally:
+            del align_model
+            del align_metadata
+            self._release_model_memory()
+
+        from whisperx.diarize import DiarizationPipeline
 
         diarize_model = DiarizationPipeline(
             token=hf_token,
             device=self.device,
         )
-        diarize_segments = diarize_model(audio)
+        try:
+            diarize_segments = diarize_model(audio)
+        finally:
+            del diarize_model
+            self._release_model_memory()
         result = whisperx.assign_word_speakers(diarize_segments, result)
 
         return self._segments_to_turns(result.get("segments", []))
 
+    def _release_model_memory(self) -> None:
+        """Collect stage-local model cycles before loading the next model."""
+        gc.collect()
+        if self.device.startswith("cuda"):
+            import torch
+
+            torch.cuda.empty_cache()
+
     @staticmethod
-    def _segments_to_turns(segments: List[Dict[str, Any]]) -> List[CallTurn]:
+    def _segments_to_turns(segments: list[dict[str, Any]]) -> list[CallTurn]:
         """Convert WhisperX segments into merged consecutive speaker turns."""
-        turns: List[CallTurn] = []
+        turns: list[CallTurn] = []
         for segment in segments:
             text = str(segment.get("text", "")).strip()
             speaker = str(segment.get("speaker", "Unknown")).strip()
@@ -273,7 +342,7 @@ class WhisperXTranscriber:
         self,
         audio_path: str | Path,
         hf_token: str,
-        allowed_roles: List[str] | None = None,
+        allowed_roles: list[str] | None = None,
         output_dir: str | Path | None = None,
     ) -> Document:
         """Return a document and optionally persist transcript artifacts."""
@@ -283,9 +352,13 @@ class WhisperXTranscriber:
             raise RuntimeError(f"No speech segments were detected in {path}.")
 
         markdown = AudioTranscriptParser.turns_to_markdown(turns)
-        metadata: Dict[str, Any] = {
+        metadata: dict[str, Any] = {
             "source": path.name,
             "file_type": "audio",
+            "transcription_model": self.model_name,
+            "transcription_language": self.language,
+            "transcription_device": self.device,
+            "transcription_compute_type": self.compute_type,
             "speaker_count": len({turn.speaker for turn in turns}),
             "speakers": sorted({turn.speaker for turn in turns}),
             "start_time": min(
@@ -312,6 +385,12 @@ class WhisperXTranscriber:
                     {
                         "source": path.name,
                         "file_type": "audio",
+                        "transcription_model": metadata["transcription_model"],
+                        "transcription_language": metadata["transcription_language"],
+                        "transcription_device": metadata["transcription_device"],
+                        "transcription_compute_type": metadata[
+                            "transcription_compute_type"
+                        ],
                         "speaker_count": metadata["speaker_count"],
                         "speakers": metadata["speakers"],
                         "start_time": metadata["start_time"],

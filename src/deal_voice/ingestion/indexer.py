@@ -1,24 +1,44 @@
+import hashlib
 import json
 import re
 import uuid
 from pathlib import Path
 from typing import Any
-from typing import List
+
 from langchain_classic.retrievers import ParentDocumentRetriever
 from langchain_classic.storage import EncoderBackedStore, LocalFileStore
 from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient, models
+
 from deal_voice.config import settings
+from deal_voice.evidence.tabular import parse_markdown_table
 from deal_voice.ingestion.qdrant_schema import ensure_collection_schema
 
 
-def list_indexed_documents(client: QdrantClient, collection_name: str) -> list[dict[str, str]]:
+def _file_sha256(path: Path) -> str | None:
+    """Return a file fingerprint, or None when a legacy artifact is unavailable."""
+    try:
+        digest = hashlib.sha256()
+        with path.open("rb") as file_handle:
+            for block in iter(lambda: file_handle.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
+    except OSError:
+        return None
+
+
+def list_indexed_documents(
+    client: QdrantClient, collection_name: str
+) -> list[dict[str, str]]:
     points, _ = client.scroll(
-        collection_name=collection_name, limit=10000,
-        with_payload=True, with_vectors=False,
+        collection_name=collection_name,
+        limit=10000,
+        with_payload=True,
+        with_vectors=False,
     )
     documents: dict[str, dict[str, str]] = {}
     for point in points:
@@ -33,7 +53,9 @@ def list_indexed_documents(client: QdrantClient, collection_name: str) -> list[d
     return list(documents.values())
 
 
-def migrate_legacy_documents(client: QdrantClient, docstore: Any, collection_name: str) -> int:
+def migrate_legacy_documents(
+    client: QdrantClient, docstore: Any, collection_name: str
+) -> int:
     """Assign stable IDs to pre-ID Qdrant points and matching parent records.
 
     Legacy chunks are grouped by source filename because older index versions
@@ -62,7 +84,9 @@ def migrate_legacy_documents(client: QdrantClient, docstore: Any, collection_nam
 
     for source, points in grouped_points.items():
         document_id = str(
-            uuid.uuid5(uuid.NAMESPACE_URL, f"deal-voice-legacy:{collection_name}:{source}")
+            uuid.uuid5(
+                uuid.NAMESPACE_URL, f"deal-voice-legacy:{collection_name}:{source}"
+            )
         )
         parent_ids: set[str] = set()
         for point in points:
@@ -86,18 +110,26 @@ def migrate_legacy_documents(client: QdrantClient, docstore: Any, collection_nam
 
 
 def delete_indexed_documents(
-    client: QdrantClient, docstore: Any, collection_name: str,
-    document_ids: List[str],
+    client: QdrantClient,
+    docstore: Any,
+    collection_name: str,
+    document_ids: list[str],
+    *,
+    delete_artifacts: bool = True,
+    protected_paths: set[Path] | None = None,
 ) -> None:
     if not document_ids:
         return
     condition = models.FieldCondition(
-        key="metadata.document_id", match=models.MatchAny(any=document_ids),
+        key="metadata.document_id",
+        match=models.MatchAny(any=document_ids),
     )
     points, _ = client.scroll(
         collection_name=collection_name,
         scroll_filter=models.Filter(must=[condition]),
-        limit=10000, with_payload=True, with_vectors=False,
+        limit=10000,
+        with_payload=True,
+        with_vectors=False,
     )
     parent_keys: set[str] = set()
     paths: set[Path] = set()
@@ -110,7 +142,11 @@ def delete_indexed_documents(
                 paths.add(Path(metadata[field]))
     for key in docstore.yield_keys():
         stored = docstore.mget([key])
-        if stored and stored[0] and stored[0].metadata.get("document_id") in document_ids:
+        if (
+            stored
+            and stored[0]
+            and stored[0].metadata.get("document_id") in document_ids
+        ):
             parent_keys.add(key)
             for field in ("original_path", "transcript_markdown", "transcript_json"):
                 if stored[0].metadata.get(field):
@@ -121,27 +157,33 @@ def delete_indexed_documents(
     )
     if parent_keys:
         docstore.mdelete(list(parent_keys))
-    for path in paths:
-        try:
-            path.unlink(missing_ok=True)
-            path.parent.rmdir()
-        except OSError:
-            pass
+    if delete_artifacts:
+        protected = {path.resolve(strict=False) for path in (protected_paths or set())}
+        for path in paths:
+            if path.resolve(strict=False) in protected:
+                continue
+            try:
+                path.unlink(missing_ok=True)
+                path.parent.rmdir()
+            except OSError:
+                pass
 
 
 class EnterpriseIndexer:
-
     def __init__(
         self,
         db_path: str = settings.qdrant_storage_path,
         collection_name: str = settings.collection_name,
         client: QdrantClient | None = None,
+        embeddings: Embeddings | None = None,
     ):
         self.collection_name = collection_name
         self.client = client or QdrantClient(path=db_path)
         self._owns_client = client is None
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name=settings.embedding_model_name
+        self.embeddings = (
+            embeddings
+            if embeddings is not None
+            else HuggingFaceEmbeddings(model_name=settings.embedding_model_name)
         )
         ensure_collection_schema(
             self.client,
@@ -185,9 +227,54 @@ class EnterpriseIndexer:
             parent_splitter=self.parent_splitter,
         )
 
-    def index_documents(self, documents: List[Document]):
+    def _duplicate_document_ids(self, documents: list[Document]) -> list[str]:
+        """Find older indexed uploads with the same binary file content."""
+        incoming_hashes = {
+            str(document.metadata["content_sha256"])
+            for document in documents
+            if document.metadata.get("content_sha256")
+        }
+        incoming_ids = {
+            str(document.metadata["document_id"])
+            for document in documents
+            if document.metadata.get("document_id")
+        }
+        if not incoming_hashes:
+            return []
+
+        duplicates: set[str] = set()
+        path_hashes: dict[str, str | None] = {}
+        offset = None
+        while True:
+            points, offset = self.client.scroll(
+                collection_name=self.collection_name,
+                offset=offset,
+                limit=1000,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in points:
+                metadata = (point.payload or {}).get("metadata", {})
+                document_id = str(metadata.get("document_id") or "")
+                if not document_id or document_id in incoming_ids:
+                    continue
+                fingerprint = metadata.get("content_sha256")
+                original_path = metadata.get("original_path")
+                if not fingerprint and original_path:
+                    path_key = str(original_path)
+                    if path_key not in path_hashes:
+                        path_hashes[path_key] = _file_sha256(Path(path_key))
+                    fingerprint = path_hashes[path_key]
+                if fingerprint and str(fingerprint) in incoming_hashes:
+                    duplicates.add(document_id)
+            if offset is None:
+                break
+        return sorted(duplicates)
+
+    def index_documents(self, documents: list[Document]):
         for document in documents:
             document.metadata.setdefault("document_id", str(uuid.uuid4()))
+        duplicate_ids = self._duplicate_document_ids(documents)
         audio_documents = []
         table_documents = []
         text_documents = []
@@ -213,14 +300,30 @@ class EnterpriseIndexer:
                 docstore=self.docstore,
                 child_splitter=RecursiveCharacterTextSplitter(
                     chunk_size=settings.child_chunk_size,
-                    chunk_overlap=0,
+                    chunk_overlap=settings.child_chunk_overlap,
                 ),
-                parent_splitter=RecursiveCharacterTextSplitter(
-                    chunk_size=settings.parent_chunk_size,
-                    chunk_overlap=0,
-                ),
+                # Audio parents already respect complete speaker turns and
+                # carry their own overlap. Splitting them again would remove
+                # that conversational context.
+                parent_splitter=None,
             )
             audio_retriever.add_documents(audio_documents, ids=None)
+
+        # Replace older copies only after the new vectors and parents exist.
+        if duplicate_ids:
+            protected_paths = {
+                Path(str(document.metadata[field]))
+                for document in documents
+                for field in ("original_path", "transcript_markdown", "transcript_json")
+                if document.metadata.get(field)
+            }
+            delete_indexed_documents(
+                self.client,
+                self.docstore,
+                self.collection_name,
+                duplicate_ids,
+                protected_paths=protected_paths,
+            )
 
     @staticmethod
     def _is_markdown_table_separator(line: str) -> bool:
@@ -232,14 +335,45 @@ class EnterpriseIndexer:
     @classmethod
     def _split_pdf_tables(
         cls, document: Document
-    ) -> tuple[List[Document], List[Document]]:
-        """Keep each exported Markdown table as a complete parent document."""
+    ) -> tuple[list[Document], list[Document]]:
+        """Preserve section provenance and validated exported table blocks.
+
+        Completeness describes the extracted Markdown block, not verification
+        that OCR or the PDF converter recovered every row in the source PDF.
+        """
         lines = document.page_content.splitlines()
         regular_lines: list[str] = []
+        text_documents: list[Document] = []
         tables: list[Document] = []
         current_heading = ""
+        heading_path: dict[int, str] = {}
+        section_index = 0
         index = 0
         table_index = 0
+        document_id = str(document.metadata.get("document_id") or uuid.uuid4())
+        base_metadata = dict(document.metadata)
+        base_metadata["document_id"] = document_id
+
+        def section_metadata() -> dict[str, Any]:
+            metadata = dict(base_metadata)
+            metadata["section_id"] = f"{document_id}::section::{section_index:04d}"
+            if heading_path:
+                metadata["section"] = list(heading_path.values())[-1]
+                metadata["section_path"] = list(heading_path.values())
+            return metadata
+
+        def flush_text() -> None:
+            content = "\n".join(regular_lines).strip()
+            # Heading-only placeholders add retrieval noise without evidence.
+            has_body = any(
+                line.strip() and not re.match(r"^\s*#{1,6}\s+", line)
+                for line in regular_lines
+            )
+            if content and has_body:
+                metadata = section_metadata()
+                metadata["content_kind"] = "text"
+                text_documents.append(Document(page_content=content, metadata=metadata))
+            regular_lines.clear()
 
         while index < len(lines):
             is_table_start = (
@@ -249,9 +383,19 @@ class EnterpriseIndexer:
             )
             if not is_table_start:
                 line = lines[index]
-                regular_lines.append(line)
-                if line.lstrip().startswith("#"):
+                heading = re.match(r"^\s*(#{1,6})\s+(.+?)\s*#*\s*$", line)
+                if heading:
+                    flush_text()
+                    section_index += 1
+                    level = len(heading.group(1))
+                    heading_path = {
+                        depth: title
+                        for depth, title in heading_path.items()
+                        if depth < level
+                    }
+                    heading_path[level] = heading.group(2).strip()
                     current_heading = line.strip()
+                regular_lines.append(line)
                 index += 1
                 continue
 
@@ -262,37 +406,46 @@ class EnterpriseIndexer:
 
             table_lines = lines[table_start:index]
             table_index += 1
-            metadata = dict(document.metadata)
-            document_id = metadata.setdefault("document_id", str(uuid.uuid4()))
-            metadata.update(
-                {
-                    "content_kind": "table",
-                    "table_id": (
-                        f"{document_id}::table::{table_index:04d}"
-                    ),
-                    "table_title": current_heading,
-                    "table_row_count": max(0, len(table_lines) - 2),
-                    "table_complete": True,
-                }
-            )
+            metadata = section_metadata()
             content = "\n".join(
                 part for part in (current_heading, *table_lines) if part
             )
+            try:
+                parsed_table = parse_markdown_table(content)
+            except ValueError as exc:
+                # Preserve the source text for inspection without presenting an
+                # invalid grid to the arithmetic executor as a usable table.
+                invalid_metadata = dict(metadata)
+                invalid_metadata.update(
+                    {
+                        "content_kind": "text",
+                        "table_structure_valid": False,
+                        "table_validation_error": str(exc),
+                    }
+                )
+                text_documents.append(
+                    Document(page_content=content, metadata=invalid_metadata)
+                )
+                continue
+            metadata.update(
+                {
+                    "content_kind": "table",
+                    "table_id": (f"{document_id}::table::{table_index:04d}"),
+                    "table_title": current_heading,
+                    "table_columns": list(parsed_table.headers),
+                    "table_row_count": len(parsed_table.rows),
+                    "table_complete": True,
+                    "table_structure_valid": True,
+                    "table_completeness_scope": "extracted_block",
+                    "table_source_complete": False,
+                }
+            )
             tables.append(Document(page_content=content, metadata=metadata))
 
-        regular_content = "\n".join(regular_lines).strip()
-        text_documents = []
-        if regular_content:
-            text_metadata = dict(document.metadata)
-            text_metadata["content_kind"] = "text"
-            text_documents.append(
-                Document(page_content=regular_content, metadata=text_metadata)
-            )
-        if not tables:
-            return [document], []
+        flush_text()
         return text_documents, tables
 
-    def _index_table_documents(self, table_documents: List[Document]) -> None:
+    def _index_table_documents(self, table_documents: list[Document]) -> None:
         """Index row-group children while storing each full table as its parent."""
         parents_to_store = []
         children_to_index = []
@@ -354,16 +507,38 @@ class EnterpriseIndexer:
             self.vector_store.add_documents(children_to_index)
 
     @staticmethod
-    def _audio_parent_documents(document: Document) -> List[Document]:
+    def _audio_parent_documents(document: Document) -> list[Document]:
         """Create parent documents without splitting across speaker turns."""
         turns = document.metadata.get("turns")
         if not isinstance(turns, list) or not turns:
             return [document]
 
-        parents: List[Document] = []
+        parents: list[Document] = []
         current: list[dict[str, Any]] = []
         current_length = 0
         max_length = settings.parent_chunk_size
+        overlap_length = settings.parent_chunk_overlap
+
+        def turn_length(turn: dict[str, Any]) -> int:
+            return len(str(turn.get("text", "")).strip())
+
+        def trailing_overlap(
+            turn_group: list[dict[str, Any]],
+        ) -> list[dict[str, Any]]:
+            if overlap_length <= 0:
+                return []
+            selected: list[dict[str, Any]] = []
+            selected_length = 0
+            for previous_turn in reversed(turn_group):
+                previous_length = turn_length(previous_turn)
+                if selected and selected_length + previous_length > overlap_length:
+                    break
+                selected.append(previous_turn)
+                selected_length += previous_length
+                if selected_length >= overlap_length:
+                    break
+            selected.reverse()
+            return selected
 
         def add_parent(turn_group: list[dict[str, Any]]) -> None:
             if not turn_group:
@@ -389,13 +564,15 @@ class EnterpriseIndexer:
             text = str(turn.get("text", "")).strip()
             if not text:
                 continue
-            turn_length = len(text)
-            if current and current_length + turn_length > max_length:
+            new_turn_length = len(text)
+            if current and current_length + new_turn_length > max_length:
                 add_parent(current)
-                current = []
-                current_length = 0
+                current = trailing_overlap(current)
+                current_length = sum(turn_length(item) for item in current)
+                while current and current_length + new_turn_length > max_length:
+                    current_length -= turn_length(current.pop(0))
             current.append(turn)
-            current_length += turn_length
+            current_length += new_turn_length
         add_parent(current)
         return parents
 
@@ -409,15 +586,19 @@ class EnterpriseIndexer:
             self.client, self.docstore, self.collection_name
         )
 
-    def delete_documents(self, document_ids: List[str]) -> None:
+    def delete_documents(self, document_ids: list[str]) -> None:
         """Remove vectors, parent records, originals, and transcript artifacts."""
         delete_indexed_documents(
             self.client, self.docstore, self.collection_name, document_ids
         )
 
-    def delete_sources(self, sources: List[str]) -> None:
+    def delete_sources(self, sources: list[str]) -> None:
         """Compatibility helper; source names may match more than one document."""
         if not sources:
             return
-        matched = [doc["document_id"] for doc in self.list_documents() if doc["source"] in sources]
+        matched = [
+            doc["document_id"]
+            for doc in self.list_documents()
+            if doc["source"] in sources
+        ]
         self.delete_documents(matched)

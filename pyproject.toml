@@ -5,68 +5,96 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "deal-voice"
 version = "0.1.0"
-description = "Enterprise Multimodal RAG: commercial call diarization + PDF knowledge with Zero-Trust RBAC on Embedded Qdrant."
+description = "Multimodal RAG system for commercial-call analysis and enterprise document search."
 readme = "README.md"
 requires-python = ">=3.10, <3.14"
+
+# --- Core Dependencies (API Server & Lightweight Orchestration) ---
 dependencies = [
-    # Vector DB (embedded, no Docker)
-    "qdrant-client>=1.11.0",
-    # Data models & config
+    # Data models & Config
     "pydantic>=2.7.0",
     "pydantic-settings>=2.2.0",
     "python-dotenv>=1.0.1",
-    # PDF extraction (local, no API cost)
-    "pymupdf>=1.24.0",
-    # Audio transcription + speaker diarization
-    "deepgram-sdk>=3.0.0",
-    # LangChain integration
+    # Vector DB
+    "qdrant-client>=1.11.0",
+    # API Server
+    "fastapi>=0.111.0",
+    "uvicorn>=0.30.0",
+    "anyio>=4.0",
+    "requests>=2.34.2",
+    # LangChain Core Integration
     "langchain>=0.2.0",
     "langchain-core>=0.2.0",
     "langchain-qdrant>=0.1.0",
-    "langchain-huggingface>=0.0.3",
     "langchain-text-splitters>=0.2.0",
-    "langchain-classic>=1.0.0",
-    # Embedding model (runs on CPU/GPU locally)
-    "sentence-transformers>=3.0.0",
-    "datasets<4.0.0",
-    "torch>=2.2.0",
-    # Data handling
+    "langchain-openai>=1.7.1",
+    "langchain-community>=0.4.2",
+    # Utilities & Logging
+    "rich>=13.7.0",
     "numpy>=1.26.0",
     "pandas>=2.2.0",
     "tabulate>=0.9.0",
-    # API server
-    "fastapi>=0.111.0",
-    "uvicorn>=0.30.0",
-    # CLI / Logging
-    "rich>=13.7.0",
-    "whisperx>=3.7.2",
-    "transformers>=4.45.0",
-    "torchaudio>=2.8.0",
-    "langchain-ollama>=1.1.0",
-    "langchain-openai>=1.7.1",
-    "langchain-community>=0.4.2",
-    "docling>=2.138.0",
-    "streamlit>=1.65.0",
-    "requests>=2.34.2",
 ]
 
+# --- Modular Optional Dependencies (Keep runtime lean) ---
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "ruff>=0.4.0",
+# Traitement PDF local
+pdf = [
+    "pymupdf>=1.24.0",
+    "docling>=2.138.0",
 ]
-docling = [
-    "docling>=2.0.0",
+# Transcriptions & Diarisation Audio
+audio = [
+    "deepgram-sdk>=3.0.0",
+    "whisperx>=3.7.2",
+    "torchaudio>=2.8.0",
 ]
-eval = [
-    "ragas>=0.1.0",
+# Inférence Local Embeddings / LLM
+local-ai = [
+    "sentence-transformers>=3.0.0",
+    "torch>=2.2.0",
+    "transformers>=4.45.0",
+    "langchain-huggingface>=0.0.3",
+    "langchain-ollama>=1.1.0",
+    "datasets<4.0.0",
+    "langchain-classic>=1.0.0",
+]
+# Interface utilisateur
+ui = [
+    "streamlit>=1.65.0",
+]
+# All-in-one pour environnement de dev local complet
+all = [
+    "deal-voice[pdf,audio,local-ai,ui]",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+deal_voice = ["web/*.html", "web/*.css", "web/*.js"]
+
+# --- PEP 735 Dependency Groups (Standard modern tooling like `uv`) ---
 [dependency-groups]
 dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.4.0",
     "deepeval>=4.2.8",
-    "pytest>=9.1.1",
+    "ragas>=0.1.0",
 ]
+
+# --- Ruff Security & Quality Configuration ---
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "S", "ASYNC", "T20"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**.py" = ["S101", "S106", "T201"]
+"scripts/**.py" = ["T201"]
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

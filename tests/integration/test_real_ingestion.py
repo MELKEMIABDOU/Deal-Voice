@@ -9,9 +9,10 @@ from deal_voice.ingestion.audio import WhisperXTranscriber
 from deal_voice.ingestion.document import EnterpriseDocumentParser
 from deal_voice.ingestion.indexer import EnterpriseIndexer
 
-
 PROJECT_ROOT = Path(__file__).parents[2]
-REAL_PDF = PROJECT_ROOT / "data" / "raw" / "Rapport_gestion_produits_Horizon_structure.pdf"
+REAL_PDF = (
+    PROJECT_ROOT / "data" / "raw" / "Rapport_gestion_produits_Horizon_structure.pdf"
+)
 REAL_AUDIO = (
     PROJECT_ROOT
     / "data"

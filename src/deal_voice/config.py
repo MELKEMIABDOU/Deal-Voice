@@ -1,4 +1,4 @@
-from typing import List
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,13 +24,24 @@ class Settings(BaseSettings):
 
     # Sécurité & RBAC
     rbac_enabled: bool = False
-    default_roles: List[str] = ["sales", "admin", "executive", "intern", "guest"]
+    default_roles: list[str] = ["sales", "admin", "executive", "intern", "guest"]
 
     # Modèle LLM Ollama
     ollama_model_name: str = "qwen3:8b"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_num_ctx: int = 4096
+    ollama_num_predict: int = 512
+    ollama_num_thread: int = 4
+    ollama_keep_alive: str = "0s"
+    ollama_reasoning: bool = False
+    ollama_request_timeout_seconds: float = Field(default=120.0, gt=0)
 
     # WhisperX / Hugging Face
     hf_token: str = ""
+    audio_worker_timeout_seconds: float = Field(default=3600, gt=0, allow_inf_nan=False)
+    audio_worker_cpu_threads: int = Field(default=2, ge=1)
+    pdf_worker_timeout_seconds: float = Field(default=1800, gt=0, allow_inf_nan=False)
+    pdf_worker_cpu_threads: int = Field(default=2, ge=1)
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

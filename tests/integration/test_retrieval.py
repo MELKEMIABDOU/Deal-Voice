@@ -1,7 +1,8 @@
 import pytest
+from langchain_core.documents import Document
+
 from deal_voice.ingestion.indexer import EnterpriseIndexer
 from deal_voice.retrieval.search import LocalSearchEngine
-from langchain_core.documents import Document
 
 
 @pytest.fixture
@@ -9,12 +10,15 @@ def temp_qdrant_db(tmp_path):
     """Creates a temporary, isolated Qdrant database for testing."""
     db_dir = str(tmp_path / "qdrant_test_db")
     indexer = EnterpriseIndexer(db_path=db_dir, collection_name="test_collection")
-    
+
     # Ingest two distinct test documents with different access levels
     test_docs = [
         Document(
             page_content="Enterprise Q3 discount pricing is 15% off standard seat licenses.",
-            metadata={"source": "pricing_guide.pdf", "allowed_roles": ["sales", "admin"]},
+            metadata={
+                "source": "pricing_guide.pdf",
+                "allowed_roles": ["sales", "admin"],
+            },
         ),
         Document(
             page_content="Executive board memo: CEO annual compensation target set to $2M.",

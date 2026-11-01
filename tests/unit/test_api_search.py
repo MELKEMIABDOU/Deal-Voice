@@ -17,9 +17,7 @@ class FakeSearchEngine:
         self.calls: list[dict[str, object]] = []
 
     def search(self, query: str, user_role: str, top_k: int) -> list[Document]:
-        self.calls.append(
-            {"query": query, "user_role": user_role, "top_k": top_k}
-        )
+        self.calls.append({"query": query, "user_role": user_role, "top_k": top_k})
         if self.should_fail:
             raise RuntimeError("database details must stay private")
 
@@ -35,12 +33,8 @@ class FakeGenerator:
     def __init__(self):
         self.calls: list[dict[str, object]] = []
 
-    def generate(
-        self, question: str, retrieved_docs: list[Document]
-    ) -> str:
-        self.calls.append(
-            {"question": question, "retrieved_docs": retrieved_docs}
-        )
+    def generate(self, question: str, retrieved_docs: list[Document]) -> str:
+        self.calls.append({"question": question, "retrieved_docs": retrieved_docs})
         return "The Q3 price is $1,200 per seat."
 
 
@@ -78,8 +72,15 @@ def test_search_route_returns_generated_answer(api_client: TestClient):
                 "speakers": None,
                 "start_time": None,
                 "end_time": None,
+                "page": None,
+                "section": None,
+                "content_kind": None,
+                "table_title": None,
+                "table_complete": None,
             }
         ],
+        "generation_status": "unknown",
+        "omitted_evidence_count": 0,
     }
 
     assert api_client.app.state.search_engine.calls == [

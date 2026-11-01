@@ -74,8 +74,7 @@ def weighted_summary(
     summaries = []
     for model, model_results in grouped.items():
         reference_words = sum(
-            result.reference_word_count or 0
-            for result in model_results
+            result.reference_word_count or 0 for result in model_results
         )
         weighted_wer = (
             sum(
