@@ -1,0 +1,113 @@
+{
+  "total": 50,
+  "distribution": {
+    "audio": 12,
+    "pdf": 8,
+    "table": 15,
+    "multi": 5,
+    "unanswerable": 10
+  },
+  "language": "fr",
+  "audio_evidence": "Transcriptions TXT seulement ; aucun audio original ni horodatage disponible. Les 12 questions audio évaluent les faits transcrits, pas la perception acoustique.",
+  "sources": [
+    "Rapport_gestion_produits_Horizon_structure.pdf",
+    "B2B-Appel.txt",
+    "Reunion-dequipe.txt"
+  ],
+  "page_numbering": "Numéros physiques du PDF, de 1 à 7.",
+  "schema": "Champs fournis dans la demande ; section optionnelle ajoutée aux citations de passages textuels. Les valeurs calculées sont explicitement signalées dans field.",
+  "negative_checks": [
+    {
+      "id": "negative-001",
+      "sources_checked": [
+        "B2B-Appel.txt"
+      ],
+      "absence_check": "Le chiffre d’affaires annuel de l’agence n’est pas indiqué.",
+      "acceptable_response": "Le chiffre d’affaires annuel de l’agence n’est pas indiqué."
+    },
+    {
+      "id": "negative-002",
+      "sources_checked": [
+        "B2B-Appel.txt"
+      ],
+      "absence_check": "La proposition chiffrée est promise mais aucun montant n’est donné.",
+      "acceptable_response": "La proposition chiffrée est promise mais aucun montant n’est donné."
+    },
+    {
+      "id": "negative-003",
+      "sources_checked": [
+        "B2B-Appel.txt"
+      ],
+      "absence_check": "La question est posée mais Karima ne donne aucun nombre.",
+      "acceptable_response": "La question est posée mais Karima ne donne aucun nombre."
+    },
+    {
+      "id": "negative-004",
+      "sources_checked": [
+        "B2B-Appel.txt"
+      ],
+      "absence_check": "Aucune adresse e-mail n’est mentionnée.",
+      "acceptable_response": "Aucune adresse e-mail n’est mentionnée."
+    },
+    {
+      "id": "negative-005",
+      "sources_checked": [
+        "B2B-Appel.txt"
+      ],
+      "absence_check": "Le jour et le mois sont indiqués, pas l’année.",
+      "acceptable_response": "Le jour et le mois sont indiqués, pas l’année."
+    },
+    {
+      "id": "negative-006",
+      "sources_checked": [
+        "Reunion-dequipe.txt"
+      ],
+      "absence_check": "Une indemnisation est demandée, mais aucune décision ni aucun montant n’est indiqué.",
+      "acceptable_response": "Une indemnisation est demandée, mais aucune décision ni aucun montant n’est indiqué."
+    },
+    {
+      "id": "negative-007",
+      "sources_checked": [
+        "Reunion-dequipe.txt"
+      ],
+      "absence_check": "La marque n’est pas indiquée.",
+      "acceptable_response": "La marque n’est pas indiquée."
+    },
+    {
+      "id": "negative-008",
+      "sources_checked": [
+        "Rapport_gestion_produits_Horizon_structure.pdf"
+      ],
+      "absence_check": "Le bénéfice net n’est pas fourni ; les marges brutes indicatives ne permettent pas de l’établir.",
+      "acceptable_response": "Le bénéfice net n’est pas fourni ; les marges brutes indicatives ne permettent pas de l’établir."
+    },
+    {
+      "id": "negative-009",
+      "sources_checked": [
+        "Rapport_gestion_produits_Horizon_structure.pdf"
+      ],
+      "absence_check": "Aucun taux de TVA n’est précisé.",
+      "acceptable_response": "Aucun taux de TVA n’est précisé."
+    },
+    {
+      "id": "negative-010",
+      "sources_checked": [
+        "Rapport_gestion_produits_Horizon_structure.pdf",
+        "B2B-Appel.txt",
+        "Reunion-dequipe.txt"
+      ],
+      "absence_check": "Aucun numéro de téléphone personnel de Karim Benali ne figure dans les trois documents.",
+      "acceptable_response": "Aucun numéro de téléphone personnel de Karim Benali ne figure dans les trois documents."
+    }
+  ],
+  "known_source_issues": [
+    "6 catégories annoncées contre 7 libellés distincts dans le référentiel (Snacks et Confiserie séparés).",
+    "6 fournisseurs annoncés contre 8 dans le suivi.",
+    "Stock final Coca-Cola 35 : incompatible avec 240 + 480 − 445 si achats distincts du stock initial.",
+    "Classement source des meilleures ventes non strictement décroissant.",
+    "Les 12 CA mensuels totalisent bien 69 830 € : pas d’erreur de somme à cet endroit.",
+    "Le rendez-vous est de principe, sous réserve de confirmation ; aucune année indiquée.",
+    "La transcription alterne Torné et Tornay : aucune normalisation de cette identité n’est imposée."
+  ],
+  "cross_document_limit": "Aucun lien factuel établi entre la réunion, l’agence appelée et Horizon."
+}
