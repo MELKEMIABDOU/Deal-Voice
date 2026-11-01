@@ -6,6 +6,8 @@ data/processed/
 data/evaluation/*.mp3
 reports/transcription/
 reports/ui/
+reports/rag/
+reports/pilot/
 local_qdrant_db/
 local_qdrant_db_backup/
 
