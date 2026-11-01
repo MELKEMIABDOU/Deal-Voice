@@ -10,7 +10,7 @@ reports/rag/
 reports/pilot/
 local_qdrant_db/
 local_qdrant_db_backup/
-
+pytest-*/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
