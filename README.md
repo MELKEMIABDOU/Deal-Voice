@@ -359,7 +359,12 @@ provide secure team sharing. A multi-user deployment must bind permissions to
 an authenticated identity and enforce document ownership or team access on the
 server.
 
-## Streamlit interface
+## Interface Streamlit legacy (optionnelle)
+
+La nouvelle interface recommandée est le portail web FastAPI décrit au début
+de ce document. Streamlit reste disponible pour le développement local et les
+tests historiques. Ne lance pas Streamlit et l'API en parallèle s'ils utilisent
+le même dossier Qdrant.
 
 Launch the interactive RAG interface:
 
@@ -982,13 +987,14 @@ uv run streamlit run streamlit_app.py
 Do not use the old vectors after this change: vectors created with the previous
 embedding model are not compatible with `BAAI/bge-m3`.
 
-After changing embedding configuration, restart the Streamlit process
-completely. A hot reload can keep an old Qdrant vector store in memory.
+After changing embedding configuration, stop completely the running API or
+Streamlit process before recreating the local Qdrant collection. A hot reload
+can keep an old Qdrant vector store in memory.
 
 The source selector starts empty. Existing files from a previous run are not
 displayed as selectable chat sources. This avoids asking questions against
 documents that were not uploaded in the current session.
-When the Streamlit process stops, cached model and Qdrant resources are cleared;
+When the owning process stops, cached model and Qdrant resources are cleared;
 the indexed data on disk remains available for a future ingestion or cleanup.
 
 ### Changing the LLM
@@ -997,7 +1003,7 @@ The default model is configured in
 `src/deal_voice/config.py`:
 
 ```python
-ollama_model_name: str = "llama3"
+ollama_model_name: str = "qwen3:8b"
 ```
 
 Prefer overriding it in `.env` without editing Python:
@@ -1006,11 +1012,11 @@ Prefer overriding it in `.env` without editing Python:
 OLLAMA_MODEL_NAME=mistral
 ```
 
-Download the model once, then restart Streamlit:
+Download the model once, then restart the API or Streamlit process:
 
 ```powershell
 ollama pull mistral
-uv run streamlit run streamlit_app.py
+uv run --no-sync python -m uvicorn deal_voice.api.main:app --app-dir src --host 127.0.0.1 --port 8000 --workers 1
 ```
 
 You can also change the model for the current Streamlit session in the
