@@ -11,8 +11,8 @@
   "audio_evidence": "Transcriptions TXT seulement ; aucun audio original ni horodatage disponible. Les 12 questions audio évaluent les faits transcrits, pas la perception acoustique.",
   "sources": [
     "Rapport_gestion_produits_Horizon_structure.pdf",
-    "B2B-Appel.txt",
-    "Reunion-dequipe.txt"
+    "B2B Appel.txt",
+    "Reunion dequipe.txt"
   ],
   "page_numbering": "Numéros physiques du PDF, de 1 à 7.",
   "schema": "Champs fournis dans la demande ; section optionnelle ajoutée aux citations de passages textuels. Les valeurs calculées sont explicitement signalées dans field.",
@@ -20,7 +20,7 @@
     {
       "id": "negative-001",
       "sources_checked": [
-        "B2B-Appel.txt"
+        "B2B Appel.txt"
       ],
       "absence_check": "Le chiffre d’affaires annuel de l’agence n’est pas indiqué.",
       "acceptable_response": "Le chiffre d’affaires annuel de l’agence n’est pas indiqué."
@@ -28,7 +28,7 @@
     {
       "id": "negative-002",
       "sources_checked": [
-        "B2B-Appel.txt"
+        "B2B Appel.txt"
       ],
       "absence_check": "La proposition chiffrée est promise mais aucun montant n’est donné.",
       "acceptable_response": "La proposition chiffrée est promise mais aucun montant n’est donné."
@@ -36,7 +36,7 @@
     {
       "id": "negative-003",
       "sources_checked": [
-        "B2B-Appel.txt"
+        "B2B Appel.txt"
       ],
       "absence_check": "La question est posée mais Karima ne donne aucun nombre.",
       "acceptable_response": "La question est posée mais Karima ne donne aucun nombre."
@@ -44,7 +44,7 @@
     {
       "id": "negative-004",
       "sources_checked": [
-        "B2B-Appel.txt"
+        "B2B Appel.txt"
       ],
       "absence_check": "Aucune adresse e-mail n’est mentionnée.",
       "acceptable_response": "Aucune adresse e-mail n’est mentionnée."
@@ -52,7 +52,7 @@
     {
       "id": "negative-005",
       "sources_checked": [
-        "B2B-Appel.txt"
+        "B2B Appel.txt"
       ],
       "absence_check": "Le jour et le mois sont indiqués, pas l’année.",
       "acceptable_response": "Le jour et le mois sont indiqués, pas l’année."
@@ -60,7 +60,7 @@
     {
       "id": "negative-006",
       "sources_checked": [
-        "Reunion-dequipe.txt"
+        "Reunion dequipe.txt"
       ],
       "absence_check": "Une indemnisation est demandée, mais aucune décision ni aucun montant n’est indiqué.",
       "acceptable_response": "Une indemnisation est demandée, mais aucune décision ni aucun montant n’est indiqué."
@@ -68,7 +68,7 @@
     {
       "id": "negative-007",
       "sources_checked": [
-        "Reunion-dequipe.txt"
+        "Reunion dequipe.txt"
       ],
       "absence_check": "La marque n’est pas indiquée.",
       "acceptable_response": "La marque n’est pas indiquée."
@@ -93,8 +93,8 @@
       "id": "negative-010",
       "sources_checked": [
         "Rapport_gestion_produits_Horizon_structure.pdf",
-        "B2B-Appel.txt",
-        "Reunion-dequipe.txt"
+        "B2B Appel.txt",
+        "Reunion dequipe.txt"
       ],
       "absence_check": "Aucun numéro de téléphone personnel de Karim Benali ne figure dans les trois documents.",
       "acceptable_response": "Aucun numéro de téléphone personnel de Karim Benali ne figure dans les trois documents."

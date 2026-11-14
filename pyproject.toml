@@ -23,17 +23,9 @@ dependencies = [
     "anyio>=4.0",
     "requests>=2.34.2",
     # LangChain Core Integration
-    "langchain>=0.2.0",
     "langchain-core>=0.2.0",
     "langchain-qdrant>=0.1.0",
     "langchain-text-splitters>=0.2.0",
-    "langchain-openai>=1.7.1",
-    "langchain-community>=0.4.2",
-    # Utilities & Logging
-    "rich>=13.7.0",
-    "numpy>=1.26.0",
-    "pandas>=2.2.0",
-    "tabulate>=0.9.0",
 ]
 
 # --- Modular Optional Dependencies (Keep runtime lean) ---
@@ -45,7 +37,6 @@ pdf = [
 ]
 # Transcriptions & Diarisation Audio
 audio = [
-    "deepgram-sdk>=3.0.0",
     "whisperx>=3.7.2",
     "torchaudio>=2.8.0",
 ]
@@ -79,9 +70,16 @@ deal_voice = ["web/*.html", "web/*.css", "web/*.js"]
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.4.0",
-    "deepeval>=4.2.8",
-    "ragas>=0.1.0",
+    "httpx>=0.27.0", # FastAPI TestClient
 ]
+evaluation = [
+    "deepeval>=4.2.8",
+]
+
+[tool.pytest.ini_options]
+# Real model evaluations are explicitly invoked; ordinary tests use fakes.
+testpaths = ["tests/unit", "tests/integration/test_document_lifecycle.py"]
+pythonpath = ["src", "."]
 
 # --- Ruff Security & Quality Configuration ---
 [tool.ruff]
