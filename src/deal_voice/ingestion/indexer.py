@@ -467,6 +467,20 @@ class EnterpriseIndexer:
             prefix = lines[: separator_index - 1]
             header = lines[separator_index - 1 : separator_index + 1]
             rows = lines[separator_index + 1 :]
+            header_metadata = dict(table.metadata)
+            header_metadata.update(
+                {
+                    "doc_id": parent_id,
+                    "table_complete": False,
+                    "table_chunk_kind": "header",
+                }
+            )
+            children_to_index.append(
+                Document(
+                    page_content="\n".join(prefix + header[:1]),
+                    metadata=header_metadata,
+                )
+            )
             row_groups: list[tuple[int, list[str]]] = []
             group_start = 1
             current_rows: list[str] = []
@@ -489,6 +503,7 @@ class EnterpriseIndexer:
                     {
                         "doc_id": parent_id,
                         "table_complete": False,
+                        "table_chunk_kind": "rows",
                         "table_chunk_index": group_index,
                         "table_row_start": first_row,
                         "table_row_end": first_row + len(row_group) - 1,

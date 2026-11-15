@@ -107,6 +107,33 @@ Citation checks validate filenames/locators, not whether they support each claim
 Unavailable checks are reported separately. Review answers manually, including
 entity attribution, negation, missing evidence and false refusals.
 
+### Multipart questions and recommendations
+
+The generator now plans separate requests and records `part_statuses`, the
+proposed plan, computed results and the semantic review in its trace. A partial
+answer is not a complete pass. Add checks for the requested metric and coverage
+of **every** request when reviewing the JSON reports.
+
+The deterministic tests in `tests/unit/test_reasoning.py` use fake model outputs.
+They cover two table operations, a known fact alongside an unresolved request,
+rejection of a wrong metric, and recommendations grounded in computed results.
+They do not measure Qwen3 accuracy. Test the actual configured model separately,
+one question at a time, using the current index or prepared contexts.
+
+Useful manual checks on the Horizon PDF include:
+
+- Ask for the highest retail price **and** products below their stock thresholds.
+  Check that both requests are covered and that retail price is not replaced by margin.
+- Ask which products should be bought more. Expect an explicit criterion or a
+  clarification, not an unqualified optimal order quantity.
+- Request the difference between stock threshold and observed stock. Verify the
+  arithmetic and whether the table describes current or historical inventory.
+
+On the meeting audio, ask for both the topic and participant identities. Unknown
+names must remain unknown; speaker labels alone are not verified identities.
+Run the same checks with unrelated schemas and different values. The existing
+50-question dataset is useful but does not by itself validate business advice.
+
 ## Transcription benchmark
 
 Use manually validated `.txt` references with the same stems as the audios:

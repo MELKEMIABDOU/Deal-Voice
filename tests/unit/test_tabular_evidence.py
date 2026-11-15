@@ -191,6 +191,107 @@ def test_numeric_filter_rejects_incompatible_units():
         )
 
 
+def test_column_comparison_and_difference_are_row_wise():
+    table = MarkdownTable(
+        ("Repère", "Disponible", "Cible"),
+        (("a", "28", "50"), ("b", "16", "8"), ("c", "12", "12")),
+    )
+    result = execute(
+        table,
+        "sort",
+        column="Écart",
+        descending=True,
+        calculations=[{"name": "Écart", "left": "Cible", "right": "Disponible"}],
+        filters=[{"column": "Disponible", "operator": "lt", "other_column": "Cible"}],
+    )
+    assert result.table.rows == (("a", "28", "50", "22"),)
+
+
+@pytest.mark.parametrize(
+    "locale,left,right,expected",
+    [
+        (",", "5,123", "3,889", "1.234"),
+        (".", "5.123", "3.889", "1.234"),
+        (None, "5.12", "3.9", "1.22"),
+    ],
+)
+def test_calculated_columns_keep_known_precision_and_locale(
+    locale, left, right, expected
+):
+    table = MarkdownTable(("Repère", "Entrée", "Sortie"), (("a", left, right),))
+    result = execute(
+        table,
+        "max",
+        column="Différence",
+        decimal_separator=locale,
+        calculations=[{"name": "Différence", "left": "Entrée", "right": "Sortie"}],
+    )
+    assert result.table.rows[0][-1] == expected
+
+
+@pytest.mark.parametrize(
+    "left,right", [("5 EUR", "3 USD"), ("2 kg", "500 g"), ("2 %", "1")]
+)
+def test_column_operations_reject_incompatible_units(left, right):
+    table = MarkdownTable(("Repère", "L", "R"), (("a", left, right),))
+    with pytest.raises(ValueError, match="units"):
+        execute(
+            table,
+            "select",
+            filters=[{"column": "L", "operator": "lt", "other_column": "R"}],
+        )
+    with pytest.raises(ValueError, match="units"):
+        execute(
+            table, "select", calculations=[{"name": "Diff", "left": "L", "right": "R"}]
+        )
+
+
+@pytest.mark.parametrize(
+    "calculations",
+    [
+        [
+            {
+                "name": "Score contrôlé",
+                "left": "Score contrôlé",
+                "right": "Score contrôlé",
+            }
+        ],
+        [{"name": "Diff", "left": "Unknown", "right": "Score contrôlé"}],
+        [{"name": "Diff", "left": "Score contrôlé", "right": "Score contrôlé"}] * 2,
+        [{"name": " ", "left": "Score contrôlé", "right": "Score contrôlé"}],
+    ],
+)
+def test_calculations_cannot_shadow_columns_or_invent_inputs(
+    measurements, calculations
+):
+    with pytest.raises(ValueError):
+        execute(measurements, "select", calculations=calculations)
+
+
+def test_unknown_column_operand_is_rejected_even_if_another_filter_matches_nothing(
+    measurements,
+):
+    with pytest.raises(ValueError, match="Unknown column"):
+        execute(
+            measurements,
+            "select",
+            filters=[
+                {"column": "Site", "operator": "eq", "value": "absent"},
+                {
+                    "column": "Score contrôlé",
+                    "operator": "gt",
+                    "other_column": "unknown",
+                },
+            ],
+        )
+
+
+def test_filter_requires_exactly_one_operand():
+    for operands in ({}, {"value": "2", "other_column": "R"}):
+        with pytest.raises(ValueError):
+            TableFilter(column="L", operator="lt", **operands)
+
+
 @pytest.mark.parametrize(
     "value,amount,unit",
     [

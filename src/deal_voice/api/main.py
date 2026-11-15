@@ -13,6 +13,7 @@ from deal_voice.api.documents import router as documents_router
 from deal_voice.api.documents import take_operation
 from deal_voice.config import settings
 from deal_voice.generation.generator import RAGGenerator
+from deal_voice.retrieval.corrective import CorrectiveRetrievalManager
 from deal_voice.retrieval.search import LocalSearchEngine
 
 logger = logging.getLogger(__name__)
@@ -107,6 +108,10 @@ class QueryResponse(BaseModel):
     retrieved_chunks: list[ChunkResponse]
     generation_status: str = "unknown"
     omitted_evidence_count: int = 0
+    answer_status: str = "unverified"
+    retrieval_status: str = "initial"
+    evidence_coverage: str = "insufficient"
+    corrective_search_used: bool = False
 
 
 def get_current_user_role(x_user_role: str | None = Header(default=None)) -> str | None:
@@ -153,11 +158,30 @@ def secure_rag_search(
         }
         if query_request.document_ids is not None:
             search_options["document_ids"] = query_request.document_ids
-        retrieved_docs = search_engine.search(**search_options)
+        retrieval_manager = CorrectiveRetrievalManager(search_engine)
+        retrieval = retrieval_manager.retrieve(**search_options)
+        retrieved_docs = retrieval.documents
 
         generated_answer = generator.generate(
             question=query_request.query, retrieved_docs=retrieved_docs
         )
+        trace = getattr(generator, "last_trace", {})
+        if not retrieval.corrective_search_used and _semantic_correction_required(
+            trace
+        ):
+            correction_options = {
+                key: value for key, value in search_options.items() if key != "query"
+            }
+            retrieval = retrieval_manager.correct(
+                query=query_request.query,
+                initial=retrieved_docs,
+                **correction_options,
+            )
+            retrieved_docs = retrieval.documents
+            generated_answer = generator.generate(
+                question=query_request.query, retrieved_docs=retrieved_docs
+            )
+            trace = getattr(generator, "last_trace", {})
 
         chunks = [
             ChunkResponse(
@@ -176,14 +200,19 @@ def secure_rag_search(
             for doc in retrieved_docs
         ]
 
-        trace = getattr(generator, "last_trace", {})
+        generation_status = trace.get("status", "unknown")
+        answer_status = _answer_status(generation_status, retrieval.coverage.status)
         return QueryResponse(
             query=query_request.query,
             authorized_role=user_role,
             answer=generated_answer,
             retrieved_chunks=chunks,
-            generation_status=trace.get("status", "unknown"),
+            generation_status=generation_status,
             omitted_evidence_count=trace.get("omitted_evidence_count", 0),
+            answer_status=answer_status,
+            retrieval_status=retrieval.retrieval_status,
+            evidence_coverage=retrieval.coverage.status,
+            corrective_search_used=retrieval.corrective_search_used,
         )
 
     except Exception:
@@ -194,3 +223,28 @@ def secure_rag_search(
         ) from None
     finally:
         lock.release()
+
+
+def _answer_status(generation_status: str, evidence_coverage: str) -> str:
+    """Expose a stable client status independently from internal pipeline states."""
+    if generation_status == "answer":
+        return "complete" if evidence_coverage == "complete" else "partial"
+    if generation_status in {"partial", "context_limit"}:
+        return "partial"
+    if generation_status == "insufficient":
+        return "insufficient"
+    if generation_status == "clarify":
+        return "clarification_required"
+    return "unverified"
+
+
+def _semantic_correction_required(trace: dict) -> bool:
+    """Retry only when semantic validation explicitly reports missing support."""
+    if trace.get("status") == "insufficient":
+        return True
+    verification = trace.get("verification")
+    return bool(
+        trace.get("status") in {"partial", "unverified"}
+        and isinstance(verification, dict)
+        and "insufficient" in verification.get("verdicts", [])
+    )

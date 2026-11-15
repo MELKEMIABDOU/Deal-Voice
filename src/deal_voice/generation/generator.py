@@ -28,15 +28,14 @@ from deal_voice.generation.prompts import (
     prompt_values,
 )
 from deal_voice.generation.schemas import (
+    AnswerPart,
     GenerationPlan,
     GroundingCheck,
-    NarrativePlan,
-    TablePlan,
     decoding_schema,
 )
 
 logger = logging.getLogger(__name__)
-VERIFICATION_OUTPUT_TOKENS = 64
+VERIFICATION_OUTPUT_TOKENS = 192
 
 
 class RAGGenerator:
@@ -58,14 +57,9 @@ class RAGGenerator:
             keep_alive=settings.ollama_keep_alive,
             client_kwargs={"timeout": settings.ollama_request_timeout_seconds},
         )
-        self.chains = {
-            plan_type: prompt
-            | self.llm.with_structured_output(
-                TablePlan if plan_type is TablePlan else decoding_schema(plan_type),
-                method="json_schema",
-            )
-            for plan_type in (NarrativePlan, TablePlan, GenerationPlan)
-        }
+        self.chain = prompt | self.llm.with_structured_output(
+            decoding_schema(), method="json_schema"
+        )
         self.verifier = self.llm.with_structured_output(
             GroundingCheck, method="json_schema"
         ).bind(
@@ -149,9 +143,11 @@ class RAGGenerator:
                 f"Omitted evidence blocks: {len(evidence) - len(candidates)}\n"
                 + "\n".join([*entries, encoded])
             )
-            # An excluded table must not consume the larger mixed-plan schema.
-            plan_type = self._plan_type([entry.document for entry in candidates])
-            values = prompt_values(question, context, plan_type)
+            has_tables = any(
+                entry.document.metadata.get("content_kind") == "table"
+                for entry in candidates
+            )
+            values = prompt_values(question, context, has_tables)
             rendered = SYSTEM_PROMPT.format(**values) + question
             if len(rendered.encode("utf-8")) > budget:
                 continue
@@ -165,16 +161,30 @@ class RAGGenerator:
         )
 
     @staticmethod
-    def _plan_type(documents: list[Document]) -> type[BaseModel]:
-        if documents and all(
-            doc.metadata.get("content_kind") == "table" for doc in documents
-        ):
-            return TablePlan
-        return (
-            GenerationPlan
-            if any(doc.metadata.get("content_kind") == "table" for doc in documents)
-            else NarrativePlan
-        )
+    def _clarification(question: str, kind: str) -> str:
+        choices = {
+            "source": (
+                "Quel document souhaitez-vous interroger ?",
+                "Which document should be used?",
+            ),
+            "column": (
+                "Quelle colonne souhaitez-vous utiliser ?",
+                "Which column should be used?",
+            ),
+            "operation": (
+                "Quel calcul souhaitez-vous effectuer ?",
+                "Which calculation should be performed?",
+            ),
+            "scope": (
+                "Pouvez-vous préciser le périmètre de votre question ?",
+                "Please clarify the scope of your question.",
+            ),
+            "criterion": (
+                "Quel critère souhaitez-vous utiliser pour cette recommandation ?",
+                "Which criterion should guide this recommendation?",
+            ),
+        }
+        return choices[kind][0 if answer_language(question) == "French" else 1]
 
     def generate(self, question: str, retrieved_docs: list[Document]) -> str:
         self._record({"status": "initializing", "actual_values": None})
@@ -202,106 +212,210 @@ class RAGGenerator:
             self._record(dict(trace, status="context_limit"))
             return self._unavailable(question, "context_limit")
         try:
-            plan_type = self._plan_type([item.document for item in included])
-            raw = self.chains[plan_type].invoke(
-                prompt_values(question, context, plan_type)
+            raw = self.chain.invoke(
+                prompt_values(
+                    question,
+                    context,
+                    any(
+                        item.document.metadata.get("content_kind") == "table"
+                        for item in included
+                    ),
+                )
             )
-            parsed = plan_type.model_validate(
+            plan = GenerationPlan.model_validate(
                 raw.model_dump() if isinstance(raw, BaseModel) else raw
             )
-            plan = (
-                parsed.as_generation_plan()
-                if isinstance(parsed, TablePlan)
-                else GenerationPlan.model_validate(parsed.model_dump())
-            )
-            trace = dict(trace, proposed_plan=plan.model_dump())
-            if plan.status == "insufficient":
-                self._record(dict(trace, status="insufficient"))
-                return self._unavailable(question)
-            if plan.status == "clarify":
-                self._record(dict(trace, status="clarify"))
-                french = answer_language(question) == "French"
-                clarifications = {
-                    "source": (
-                        "Quel document souhaitez-vous interroger ?",
-                        "Which document should be used?",
-                    ),
-                    "column": (
-                        "Quelle colonne souhaitez-vous utiliser ?",
-                        "Which column should be used?",
-                    ),
-                    "operation": (
-                        "Quel calcul souhaitez-vous effectuer ?",
-                        "Which calculation should be performed?",
-                    ),
-                    "scope": (
-                        "Pouvez-vous préciser le périmètre de votre question ?",
-                        "Please clarify the scope of your question.",
-                    ),
-                }
-                return clarifications[plan.clarification][0 if french else 1]
-            answer, values, computations = self._render_plan(plan, included, question)
-            if plan.claims:
-                verdict = self._verify_claims(question, plan, included)
-                trace["verification"] = verdict
-                if verdict != "supported":
-                    status = (
-                        "context_limit" if verdict == "context_limit" else "unverified"
+            # A single answer part represents the complete user request. Use the
+            # original text as its label: local models commonly correct spelling
+            # while planning, which must not invalidate an otherwise valid plan.
+            if len(plan.parts) == 1:
+                plan.parts[0].request = question
+            else:
+                labels: dict[str, int] = {}
+                for index, part in enumerate(plan.parts, start=1):
+                    label = part.request.strip() or (
+                        f"Partie {index}"
+                        if answer_language(question) == "French"
+                        else f"Part {index}"
                     )
-                    self._record(dict(trace, status=status))
-                    return self._unavailable(question, status)
+                    key = normalized_label(label).strip(" ?.!;:")
+                    labels[key] = labels.get(key, 0) + 1
+                    if labels[key] > 1:
+                        label = f"{label} ({labels[key]})"
+                    part.request = label
+            trace["proposed_plan"] = plan.model_dump()
+            prepared = []
+            for part in plan.parts:
+                if part.status != "answer":
+                    text = (
+                        self._clarification(question, part.clarification)
+                        if part.status == "clarify"
+                        else self._unavailable(question)
+                    )
+                    prepared.append(
+                        {
+                            "status": part.status,
+                            "text": text,
+                            "values": None,
+                            "computations": [],
+                        }
+                    )
+                    continue
+                try:
+                    text, values, computations = self._render_part(
+                        part, included, question
+                    )
+                    prepared.append(
+                        {
+                            "status": "answer",
+                            "text": text,
+                            "values": values,
+                            "computations": computations,
+                        }
+                    )
+                except ValueError as exc:
+                    prepared.append(
+                        {
+                            "status": "invalid_plan",
+                            "text": self._unavailable(question, "invalid_plan"),
+                            "values": None,
+                            "computations": [],
+                            "error": str(exc),
+                        }
+                    )
+            review = self._verify_plan(question, plan, included, prepared)
+            if review is None:
+                self._record(
+                    dict(trace, status="context_limit", verification="context_limit")
+                )
+                return self._unavailable(question, "context_limit")
+            trace["verification"] = review.model_dump()
         except (ValidationError, OutputParserException, ValueError) as exc:
             logger.warning("Rejected unverifiable generation plan: %s", exc)
             self._record(dict(trace, status="invalid_plan", error=str(exc)))
             return self._unavailable(question, "invalid_plan")
-        self._record(
-            dict(
-                trace, status="answer", actual_values=values, computations=computations
+
+        paragraphs, values, computations, statuses = [], [], [], []
+        for part, item, verdict in zip(
+            plan.parts, prepared, review.verdicts, strict=True
+        ):
+            status, text = item["status"], item["text"]
+            if verdict != "supported":
+                status, text = "unverified", self._unavailable(question)
+            elif status == "answer":
+                values.extend(item["values"] or [])
+                computations.extend(item["computations"])
+            statuses.append(status)
+            if len(plan.parts) > 1:
+                text = f"**{part.request.strip()}**\n\n{text}"
+            paragraphs.append(text)
+        french = answer_language(question) == "French"
+        if review.coverage != "complete":
+            paragraphs.append(
+                "Réponse partielle : toutes les demandes de votre question n'ont pas été couvertes. Posez séparément les demandes restantes."
+                if french
+                else "Partial answer: not all requests were covered. Please ask the remaining requests separately."
             )
-        )
-        if omitted:
-            answer += "\n\n" + (
+        if omitted and (
+            review.coverage != "complete"
+            or any(part_status != "answer" for part_status in statuses)
+        ):
+            paragraphs.append(
                 f"Contexte partiel : {omitted} passage(s) récupéré(s) n’ont pas été inclus dans la capacité disponible."
-                if answer_language(question) == "French"
+                if french
                 else f"Partial context: {omitted} retrieved passage(s) did not fit the available capacity."
             )
-        return answer
+        status = statuses[0] if len(set(statuses)) == 1 else "partial"
+        if review.coverage != "complete":
+            status = "partial"
+        self._record(
+            dict(
+                trace,
+                status=status,
+                part_statuses=statuses,
+                actual_values=values or None,
+                computations=computations,
+            )
+        )
+        return "\n\n".join(paragraphs)
 
-    def _verify_claims(
-        self, question: str, plan: GenerationPlan, evidence: list[Evidence]
-    ) -> str:
-        """One bounded, sequential check; no rewriting or automatic retries."""
-        cited = {ref.evidence_id for claim in plan.claims for ref in claim.references}
+    def _verify_plan(
+        self,
+        question: str,
+        plan: GenerationPlan,
+        evidence: list[Evidence],
+        prepared: list[dict],
+    ) -> GroundingCheck | None:
+        """One bounded review of coverage, meaning, claims and advice; no retry loop."""
+        used = {
+            ref.evidence_id
+            for part in plan.parts
+            for claim in part.claims
+            for ref in claim.references
+        } | {query.evidence_id for part in plan.parts for query in part.table_queries}
+        catalog = {}
+        for item in evidence:
+            if item.evidence_id not in used:
+                continue
+            entry = {"citation": item.citation()}
+            if item.document.metadata.get("content_kind") == "table":
+                entry["columns"] = parse_markdown_table(
+                    item.document.page_content
+                ).headers
+                entry["complete_extracted_block"] = (
+                    item.document.metadata.get("table_complete") is True
+                )
+            else:
+                entry["content"] = item.document.page_content
+            catalog[item.evidence_id] = entry
+        parts = []
+        for part, item in zip(plan.parts, prepared, strict=True):
+            entry = part.model_dump(exclude_none=True, exclude_defaults=True)
+            if item["status"] == "invalid_plan":
+                entry["execution_error"] = item["error"]
+            elif item["computations"]:
+                entry["computed_results"] = [
+                    self._compact_computation(index, computation)
+                    for index, computation in enumerate(item["computations"])
+                ]
+            parts.append(entry)
         payload = json.dumps(
-            {
-                "question": question,
-                "claims": [
-                    claim.model_dump(exclude_none=True) for claim in plan.claims
-                ],
-                "evidence": {
-                    item.evidence_id: {
-                        "citation": item.citation(),
-                        "content": item.document.page_content,
-                    }
-                    for item in evidence
-                    if item.evidence_id in cited
-                },
-            },
+            {"question": question, "parts": parts, "evidence": catalog},
             ensure_ascii=False,
             separators=(",", ":"),
         )
         budget = settings.ollama_num_ctx - VERIFICATION_OUTPUT_TOKENS - 256
         if len((VERIFICATION_PROMPT + payload).encode("utf-8")) > budget:
-            return "context_limit"
+            return None
         raw = self.verifier.invoke(
             [("system", VERIFICATION_PROMPT), ("human", payload)]
         )
-        return GroundingCheck.model_validate(
+        review = GroundingCheck.model_validate(
             raw.model_dump() if isinstance(raw, BaseModel) else raw
-        ).verdict
+        )
+        if len(review.verdicts) != len(plan.parts):
+            raise ValueError("The reviewer must assess every part exactly once.")
+        return review
 
-    def _render_plan(
-        self, plan: GenerationPlan, evidence: list[Evidence], question: str
+    @staticmethod
+    def _compact_computation(index: int, computation: dict) -> dict:
+        """Give the reviewer bounded Python results, including winning rows."""
+        result = computation["result"]
+        rows = list(result["rows"])
+        shown = rows[:5]
+        return {
+            "query_index": index,
+            "operation": computation["query"]["operation"],
+            "column": computation["query"].get("column"),
+            "headers": result["headers"],
+            "rows": shown,
+            "aggregate": result["aggregate"],
+            "matched_row_count": result["matched_row_count"],
+            "review_rows_omitted": max(0, len(rows) - len(shown)),
+        }
+
+    def _render_part(
+        self, plan: AnswerPart, evidence: list[Evidence], question: str
     ) -> tuple[str, list | None, list]:
         catalog = {item.evidence_id: item for item in evidence}
         paragraphs, values, computations = [], [], []
@@ -351,6 +465,11 @@ class RAGGenerator:
             }
             label = labels[query.operation] if french else query.operation.capitalize()
             label += f" — {query.column}" if query.column else ""
+            if query.calculations:
+                label += "\n" + "\n".join(
+                    f"{item.name} = {item.left} − {item.right}"
+                    for item in query.calculations
+                )
             if result.aggregate is not None:
                 has_aggregate = True
                 text = f"{label} : {result.aggregate}."
@@ -384,12 +503,19 @@ class RAGGenerator:
                     "aggregate": result.aggregate,
                     "matched_row_count": result.matched_row_count,
                     "input_row_count": len(table.rows),
+                    "result": {
+                        "headers": result.table.headers,
+                        "rows": result.table.rows,
+                        "aggregate": result.aggregate,
+                        "truncated": result.truncated,
+                        "matched_row_count": result.matched_row_count,
+                    },
                 }
             )
             if result.aggregate is None:
                 identities = query.identity_columns or [table.headers[0]]
                 canonical_headers = {
-                    normalized_label(header): header for header in table.headers
+                    normalized_label(header): header for header in result.table.headers
                 }
                 identities = [
                     canonical_headers[normalized_label(name)] for name in identities
@@ -406,6 +532,34 @@ class RAGGenerator:
                                 }
                                 for field, value in record.items()
                             )
+        if plan.recommendation:
+            advice = plan.recommendation
+            texts = [
+                advice.action,
+                advice.criterion,
+                *advice.assumptions,
+                *advice.limits,
+            ]
+            if any(re.search(r"(?i)\bsource(?:\*\*)?\s*:", text) for text in texts):
+                raise ValueError("Advice cannot supply its own citations.")
+            french = answer_language(question) == "French"
+            paragraphs.append(
+                ("Proposition : " if french else "Proposal: ")
+                + advice.action
+                + "\n"
+                + ("Critère : " if french else "Criterion: ")
+                + advice.criterion
+                + (
+                    "\n"
+                    + ("Hypothèses : " if french else "Assumptions: ")
+                    + "; ".join(advice.assumptions)
+                    if advice.assumptions
+                    else ""
+                )
+                + "\n"
+                + ("Limites : " if french else "Limits: ")
+                + "; ".join(advice.limits)
+            )
         return (
             "\n\n".join(paragraphs),
             (values if plan.table_queries and not has_aggregate else None),

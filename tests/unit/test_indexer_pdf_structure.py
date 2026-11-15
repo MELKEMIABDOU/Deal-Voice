@@ -92,3 +92,50 @@ def test_sections_are_preserved_even_without_a_table():
     assert tables == []
     assert [document.metadata["section"] for document in text] == ["Terms", "Contact"]
     assert "Payment" not in text[1].page_content
+
+
+def test_table_indexing_adds_a_header_vector_linked_to_the_complete_parent():
+    _, tables = EnterpriseIndexer._split_pdf_tables(
+        pdf_document(
+            "## Inventory\n"
+            "| Product | Remaining stock | Price |\n"
+            "| --- | --- | --- |\n"
+            "| Filter | 12 | 20 EUR |\n"
+            "| Joint | 30 | 8 EUR |"
+        )
+    )
+    stored, indexed = [], []
+
+    class Store:
+        def mset(self, items):
+            stored.extend(items)
+
+    class Vectors:
+        def add_documents(self, documents):
+            indexed.extend(documents)
+
+    indexer = EnterpriseIndexer.__new__(EnterpriseIndexer)
+    indexer.docstore = Store()
+    indexer.vector_store = Vectors()
+
+    indexer._index_table_documents(tables)
+
+    assert len(stored) == 1
+    header = next(
+        document
+        for document in indexed
+        if document.metadata["table_chunk_kind"] == "header"
+    )
+    rows = [
+        document
+        for document in indexed
+        if document.metadata["table_chunk_kind"] == "rows"
+    ]
+    assert header.page_content == (
+        "## Inventory\n| Product | Remaining stock | Price |"
+    )
+    assert "Filter" not in header.page_content
+    assert rows
+    assert header.metadata["doc_id"] == stored[0][0]
+    assert all(document.metadata["doc_id"] == stored[0][0] for document in rows)
+    assert stored[0][1].metadata["table_complete"] is True

@@ -252,12 +252,12 @@ function sourceCaption(source, index) {
 function showResponse(card, response) {
   card.replaceChildren();
   card.removeAttribute("aria-busy");
-  const statuses = { answer: "Réponse proposée", insufficient: "Information non établie", unverified: "Information non établie", clarify: "Précision nécessaire", context_limit: "Périmètre à préciser", invalid_plan: "Réponse non établie", invalid_evidence: "Réponse non établie" };
+  const statuses = { complete: "Réponse complète", partial: "Réponse partielle", insufficient: "Information insuffisante", clarification_required: "Précision nécessaire", unverified: "Réponse non vérifiée" };
   const header = node("div", "answer-heading");
   const label = node("div", "answer-label");
-  label.append(node("span", "", "✦"), node("span", "", statuses[response.generation_status] || "Réponse"));
+  label.append(node("span", "", "✦"), node("span", "", statuses[response.answer_status] || "Réponse"));
   header.append(label);
-  if (response.omitted_evidence_count > 0) header.append(node("span", "partial-badge", "Contexte partiel"));
+  if (response.corrective_search_used) header.append(node("span", "partial-badge", "Recherche complétée"));
   const copy = node("button", "text-button copy-button", "Copier"); copy.type = "button";
   copy.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(response.answer); copy.textContent = "Copié"; }
@@ -275,7 +275,7 @@ function showResponse(card, response) {
     sources.forEach((source, index) => {
       const details = node("details", "source");
       details.append(node("summary", "", sourceCaption(source, index)));
-      if (source.content_kind === "table") details.append(node("p", "source-note", source.table_complete === true ? "Bloc extrait entier · la couverture du PDF reste à vérifier." : "Bloc de tableau extrait · la couverture du PDF reste à vérifier."));
+      if (source.content_kind === "table") details.append(node("p", "source-note", source.table_complete === true ? "Tableau complet extrait." : "Extrait de tableau incomplet."));
       details.append(node("pre", "source-content", source.content || ""));
       wrapper.append(details);
     });

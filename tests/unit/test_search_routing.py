@@ -1,6 +1,7 @@
 """Retrieval contracts independent of question wording or business columns."""
 
 from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
 from langchain_core.documents import Document
@@ -28,11 +29,13 @@ class FakeDocstore:
         return [self.parents.get(key) for key in keys]
 
 
-def make_engine(children, parents=None, reranker=None):
+def make_engine(children, parents=None, reranker=None, client=None):
     engine = LocalSearchEngine.__new__(LocalSearchEngine)
     engine.vector_store = FakeVectorStore(children)
     engine.docstore = FakeDocstore(parents or {})
     engine.reranker = reranker
+    engine.client = client
+    engine.collection_name = "knowledge"
     engine.candidate_pool_size = 30
     engine.rerank_batch_size = 1
     return engine
@@ -149,6 +152,97 @@ def test_reranking_is_bounded_uses_small_batches_and_does_not_mutate_stored_docs
         "Evidence 2",
     ]
     assert documents == original
+
+
+def test_exact_table_header_match_reaches_generation_before_related_results():
+    related = [
+        Document(
+            page_content=f"Conseils généraux sur les stocks {index}",
+            metadata={"content_kind": "text"},
+        )
+        for index in range(4)
+    ]
+    exact_table = Document(
+        page_content=("| Produit | Stock restant |\n| --- | --- |\n| Filtre | 12 |"),
+        metadata={"content_kind": "table"},
+    )
+
+    class Reranker:
+        def predict(self, pairs, **kwargs):
+            return [0.9, 0.8, 0.7, 0.6, 0.1]
+
+    engine = make_engine([*related, exact_table], reranker=Reranker())
+    results = engine.search("Quel produit a le stock restant le plus faible ?", top_k=3)
+
+    assert results[0].page_content == exact_table.page_content
+    assert results[0].metadata["header_match_score"] == {"phrases": 1, "terms": 3}
+    assert len(results) == 3
+
+
+def test_one_generic_header_term_does_not_override_semantic_ranking():
+    semantic = Document(
+        page_content="Réponse précise", metadata={"content_kind": "text"}
+    )
+    generic_table = Document(
+        page_content="| Stock | Valeur |\n| --- | --- |\n| A | 12 |",
+        metadata={"content_kind": "table"},
+    )
+
+    class Reranker:
+        def predict(self, pairs, **kwargs):
+            return [0.9, 0.1]
+
+    engine = make_engine([semantic, generic_table], reranker=Reranker())
+    results = engine.search("Comment gérer le stock ?", top_k=1)
+
+    assert [document.page_content for document in results] == [semantic.page_content]
+    assert "header_match_score" not in results[0].metadata
+
+
+def test_metadata_header_match_recovers_parent_missed_by_dense_retrieval():
+    semantic = Document(page_content="Conseils sur les stocks")
+    exact_parent = Document(
+        page_content="| Produit | Stock restant |\n| --- | --- |\n| Filtre | 12 |",
+        metadata={"content_kind": "table", "document_id": "pdf-1"},
+    )
+
+    class Client:
+        def scroll(self, **kwargs):
+            self.kwargs = kwargs
+            return (
+                [
+                    SimpleNamespace(
+                        payload={
+                            "metadata": {
+                                "doc_id": "table-parent",
+                                "document_id": "pdf-1",
+                                "table_chunk_kind": "header",
+                                "table_columns": ["Produit", "Stock restant"],
+                            }
+                        }
+                    )
+                ],
+                None,
+            )
+
+    client = Client()
+    engine = make_engine(
+        [semantic], {"table-parent": exact_parent}, reranker=None, client=client
+    )
+    results = engine.search(
+        "Quel produit a le stock restant le plus faible ?",
+        document_ids="pdf-1",
+        top_k=1,
+    )
+
+    assert results[0].page_content == exact_parent.page_content
+    assert results[0].metadata["parent_id"] == "table-parent"
+    must = client.kwargs["scroll_filter"].must
+    assert {condition.key for condition in must} == {
+        "metadata.document_id",
+        "metadata.table_chunk_kind",
+    }
+    assert client.kwargs["limit"] == LocalSearchEngine.MAX_CANDIDATES
 
 
 def test_repeated_content_in_distinct_documents_is_not_deduplicated():

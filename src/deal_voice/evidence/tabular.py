@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation, localcontext
 from fractions import Fraction
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 def normalized_label(value: str) -> str:
@@ -92,7 +92,25 @@ class TableFilter(BaseModel):
 
     column: str
     operator: Literal["eq", "ne", "contains", "lt", "le", "gt", "ge"]
-    value: str
+    value: str | None = None
+    other_column: str | None = None
+
+    @model_validator(mode="after")
+    def one_operand(self):
+        if (self.value is None) == (self.other_column is None):
+            raise ValueError("A filter requires exactly one literal or column operand.")
+        if self.other_column is not None and self.operator == "contains":
+            raise ValueError("Column comparisons must be numeric.")
+        return self
+
+
+class ColumnDifference(BaseModel):
+    """Row-wise subtraction of two source columns; no generated expressions."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    name: str = Field(min_length=1, max_length=100)
+    left: str
+    right: str
 
 
 class TableQuery(BaseModel):
@@ -105,6 +123,7 @@ class TableQuery(BaseModel):
         description="Exact catalog column for min/max/sum/mean/sort; omit for row selection/count.",
     )
     filters: list[TableFilter] = Field(default_factory=list, max_length=16)
+    calculations: list[ColumnDifference] = Field(default_factory=list, max_length=4)
     select_columns: list[str] = Field(default_factory=list)
     identity_columns: list[str] = Field(default_factory=list)
     descending: bool = False
@@ -177,6 +196,8 @@ class TableResult:
 def execute_table_query(
     table: MarkdownTable, query: TableQuery, *, complete: bool
 ) -> TableResult:
+    if query.calculations:
+        table = _with_differences(table, query)
     lookup = {
         normalized_label(header): index for index, header in enumerate(table.headers)
     }
@@ -186,6 +207,14 @@ def execute_table_query(
             return lookup[normalized_label(name)]
         except KeyError as exc:
             raise ValueError(f"Unknown column: {name!r}") from exc
+
+    calculated = {column_index(item.name) for item in query.calculations}
+
+    def number_at(row: tuple[str, ...], index: int) -> NumericCell:
+        # Computed numbers have a known canonical decimal separator.
+        return numeric_cell(
+            row[index], "." if index in calculated else query.decimal_separator
+        )
 
     if query.operation != "select" and not complete:
         raise ValueError("This operation requires a complete extracted table.")
@@ -198,23 +227,31 @@ def execute_table_query(
         column_index(name)
     for rule in query.filters:
         column_index(rule.column)
-        if rule.operator in {"lt", "le", "gt", "ge"}:
+        if rule.other_column is not None:
+            column_index(rule.other_column)
+        elif rule.operator in {"lt", "le", "gt", "ge"}:
             numeric_cell(rule.value, query.decimal_separator)
 
     def matches(row: tuple[str, ...], rule: TableFilter) -> bool:
         cell = row[column_index(rule.column)]
-        if rule.operator in {"eq", "ne", "contains"}:
+        if rule.other_column is None and rule.operator in {"eq", "ne", "contains"}:
             left, right = normalized_label(cell), normalized_label(rule.value)
             return {
                 "eq": left == right,
                 "ne": left != right,
                 "contains": right in left,
             }[rule.operator]
-        left = numeric_cell(cell, query.decimal_separator)
-        right = numeric_cell(rule.value, query.decimal_separator)
+        left = number_at(row, column_index(rule.column))
+        right = (
+            number_at(row, column_index(rule.other_column))
+            if rule.other_column is not None
+            else numeric_cell(rule.value, query.decimal_separator)
+        )
         if left.unit != right.unit:
             raise ValueError("Filter units differ from the column's units.")
         return {
+            "eq": left.amount == right.amount,
+            "ne": left.amount != right.amount,
             "lt": left.amount < right.amount,
             "le": left.amount <= right.amount,
             "gt": left.amount > right.amount,
@@ -231,7 +268,7 @@ def execute_table_query(
     elif query.operation in {"min", "max", "sum", "mean", "sort"}:
         if not rows:
             raise ValueError("No rows match; no numeric result is available.")
-        numbers = [numeric_cell(row[target], query.decimal_separator) for row in rows]
+        numbers = [number_at(row, target) for row in rows]
         if len({number.unit for number in numbers}) != 1:
             raise ValueError("The column contains incompatible units.")
         if query.operation in {"min", "max"}:
@@ -305,4 +342,48 @@ def execute_table_query(
         aggregate,
         truncated,
         matched_result_count,
+    )
+
+
+def _with_differences(table: MarkdownTable, query: TableQuery) -> MarkdownTable:
+    lookup = {normalized_label(name): i for i, name in enumerate(table.headers)}
+    names = [normalized_label(item.name) for item in query.calculations]
+    if any(not name or name in lookup for name in names) or len(set(names)) != len(
+        names
+    ):
+        raise ValueError("Calculated columns must have unique new names.")
+    pairs = []
+    for item in query.calculations:
+        try:
+            pairs.append(
+                (
+                    lookup[normalized_label(item.left)],
+                    lookup[normalized_label(item.right)],
+                )
+            )
+        except KeyError as exc:
+            raise ValueError("Calculations require original source columns.") from exc
+    rows = []
+    for row in table.rows:
+        values = []
+        for left_index, right_index in pairs:
+            left = numeric_cell(row[left_index], query.decimal_separator)
+            right = numeric_cell(row[right_index], query.decimal_separator)
+            if left.unit != right.unit:
+                raise ValueError("Subtraction requires compatible units.")
+            with localcontext() as context:
+                context.prec = max(
+                    28,
+                    sum(
+                        len(n.amount.as_tuple().digits)
+                        + abs(n.amount.as_tuple().exponent)
+                        for n in (left, right)
+                    )
+                    + 10,
+                )
+                difference = format(left.amount - right.amount, "f")
+            values.append(f"{difference} {left.unit}".strip())
+        rows.append((*row, *values))
+    return MarkdownTable(
+        (*table.headers, *(item.name for item in query.calculations)), tuple(rows)
     )

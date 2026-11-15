@@ -38,6 +38,20 @@ class FakeGenerator:
         return "The Q3 price is $1,200 per seat."
 
 
+class CorrectedGenerator(FakeGenerator):
+    def __init__(self):
+        super().__init__()
+        self.last_trace = {"status": "insufficient"}
+
+    def generate(self, question: str, retrieved_docs: list[Document]) -> str:
+        self.calls.append({"question": question, "retrieved_docs": retrieved_docs})
+        if len(self.calls) == 1:
+            self.last_trace = {"status": "insufficient"}
+            return "Insufficient"
+        self.last_trace = {"status": "answer"}
+        return "Corrected answer"
+
+
 @pytest.fixture
 def api_client():
     app.state.search_engine = FakeSearchEngine()
@@ -81,11 +95,41 @@ def test_search_route_returns_generated_answer(api_client: TestClient):
         ],
         "generation_status": "unknown",
         "omitted_evidence_count": 0,
+        "answer_status": "unverified",
+        "retrieval_status": "initial",
+        "evidence_coverage": "complete",
+        "corrective_search_used": False,
     }
 
     assert api_client.app.state.search_engine.calls == [
         {"query": "What is the Q3 price?", "user_role": "sales", "top_k": 5}
     ]
+
+
+def test_semantic_insufficiency_triggers_exactly_one_corrective_search():
+    engine = FakeSearchEngine()
+    generator = CorrectedGenerator()
+    app.state.search_engine = engine
+    app.state.generator = generator
+    client = TestClient(app)
+    try:
+        response = client.post(
+            "/api/v1/search",
+            json={"query": "Who signed?", "top_k": 5},
+            headers={"X-User-Role": "sales"},
+        )
+    finally:
+        client.close()
+        del app.state.search_engine
+        del app.state.generator
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "Corrected answer"
+    assert response.json()["corrective_search_used"] is True
+    assert response.json()["retrieval_status"] == "corrected"
+    assert len(engine.calls) == 2
+    assert "tableau complet et source complète" in engine.calls[1]["query"]
+    assert engine.calls[1]["user_role"] == "sales"
 
 
 @pytest.mark.parametrize(

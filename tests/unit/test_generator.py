@@ -7,17 +7,16 @@ from langchain_core.documents import Document
 
 from deal_voice.config import settings
 from deal_voice.evidence.citations import evidence_from_documents
-from deal_voice.generation.generator import VERIFICATION_OUTPUT_TOKENS, RAGGenerator
+from deal_voice.generation.generator import RAGGenerator
 from deal_voice.generation.prompts import (
     SYSTEM_PROMPT,
-    VERIFICATION_PROMPT,
     prompt_values,
 )
 from deal_voice.generation.schemas import (
+    AnswerPart,
     GenerationPlan,
     GroundingCheck,
-    NarrativePlan,
-    TablePlan,
+    PlannedTableQuery,
 )
 
 pytestmark = pytest.mark.usefixtures("offline_ollama")
@@ -31,23 +30,32 @@ class FakeChain:
     def invoke(self, payload):
         self.payload = payload
         entries = [json.loads(line) for line in payload["context"].splitlines()[1:]]
-        return self.response(entries)
+        result = self.response(entries)
+        if "parts" not in result:
+            result = {"parts": [{"request": payload["question"], **result}]}
+        return result
 
 
 class FakeVerifier:
-    def __init__(self, verdict="supported"):
+    def __init__(self, verdict="supported", coverage="complete"):
         self.verdict = verdict
+        self.coverage = coverage
         self.payload = None
 
     def invoke(self, messages):
         self.payload = json.loads(messages[-1][1])
-        return {"verdict": self.verdict}
+        verdicts = (
+            self.verdict
+            if isinstance(self.verdict, list)
+            else [self.verdict] * len(self.payload["parts"])
+        )
+        return {"coverage": self.coverage, "verdicts": verdicts}
 
 
-def generator_for(response, *, verdict="supported"):
+def generator_for(response, *, verdict="supported", coverage="complete"):
     generator = RAGGenerator()
-    generator.chains = dict.fromkeys(generator.chains, FakeChain(response))
-    generator.verifier = FakeVerifier(verdict)
+    generator.chain = FakeChain(response)
+    generator.verifier = FakeVerifier(verdict, coverage)
     return generator
 
 
@@ -72,29 +80,6 @@ def table_document():
             "table_complete": True,
         },
     )
-
-
-def test_planner_schemas_do_not_allow_numeric_locale_decisions():
-    flat = TablePlan.model_json_schema()["properties"]["decimal_separator"]
-    mixed = GenerationPlan.model_json_schema()["$defs"]["PlannedTableQuery"]
-    assert flat["type"] == "null"
-    assert mixed["properties"]["decimal_separator"]["type"] == "null"
-    for separator in (",", "."):
-        with pytest.raises(ValueError):
-            TablePlan(evidence_id="E", operation="max", decimal_separator=separator)
-        with pytest.raises(ValueError):
-            GenerationPlan.model_validate(
-                {
-                    "status": "answer",
-                    "table_queries": [
-                        {
-                            "evidence_id": "E",
-                            "operation": "max",
-                            "decimal_separator": separator,
-                        }
-                    ],
-                }
-            )
 
 
 @pytest.mark.parametrize(
@@ -135,7 +120,12 @@ def claim_plan(entries, text="Le contrat commence lundi."):
 
 
 def query_plan(entries, operation="select", **kwargs):
-    return {"evidence_id": entries[0]["evidence_id"], "operation": operation, **kwargs}
+    return {
+        "status": "answer",
+        "table_queries": [
+            {"evidence_id": entries[0]["evidence_id"], "operation": operation, **kwargs}
+        ],
+    }
 
 
 @pytest.mark.parametrize(
@@ -152,10 +142,8 @@ def query_plan(entries, operation="select", **kwargs):
 def test_language_constraint_is_transmitted_to_planner(question, language):
     generator = generator_for(claim_plan)
     answer = generator.generate(question, [narrative()])
-    assert (
-        generator.chains[NarrativePlan]
-        .payload["answer_language_instruction"]
-        .startswith(f"OUTPUT LANGUAGE: {language}.")
+    assert generator.chain.payload["answer_language_instruction"].startswith(
+        f"OUTPUT LANGUAGE: {language}."
     )
     assert "Source : contrat.txt" in answer
 
@@ -276,9 +264,8 @@ def test_explicit_insufficiency_and_clarification_are_distinct():
     assert "Je ne dispose pas" in generator.generate(
         "Quel est le revenu ?", [narrative()]
     )
-    generator.chains = dict.fromkeys(
-        generator.chains,
-        FakeChain(lambda _: {"status": "clarify", "clarification": "column"}),
+    generator.chain = FakeChain(
+        lambda _: {"status": "clarify", "clarification": "column"}
     )
     assert (
         generator.generate("Quel est le revenu ?", [narrative()])
@@ -324,7 +311,7 @@ def test_normal_audio_parent_fits_without_truncation_or_larger_context(monkeypat
     assert "instruments de mesure" in answer
     assert "Source : appel.mp3 — 8.5–111.5 s" in answer
     assert generator.last_trace["omitted_evidence_count"] == 0
-    payload = generator.chains[NarrativePlan].payload
+    payload = generator.chain.payload
     rendered = SYSTEM_PROMPT.format(**payload) + payload["question"]
     assert len(rendered.encode("utf-8")) <= 4096 - 512 - 256
 
@@ -339,14 +326,13 @@ def test_excluded_table_does_not_block_a_ranked_audio_parent(monkeypatch):
         [document, table_document()],
     )
     entries = [
-        json.loads(line)
-        for line in generator.chains[NarrativePlan].payload["context"].splitlines()[1:]
+        json.loads(line) for line in generator.chain.payload["context"].splitlines()[1:]
     ]
     assert len(entries) == 1
     assert entries[0]["content"] == document.page_content
     assert generator.last_trace["status"] == "answer"
     assert generator.last_trace["omitted_evidence_count"] == 1
-    assert "Contexte partiel" in answer
+    assert "Contexte partiel" not in answer
 
 
 def test_no_evidence_does_not_call_model():
@@ -375,16 +361,6 @@ def test_generated_citation_lines_cannot_override_metadata():
     assert generator.last_trace["status"] == "invalid_plan"
 
 
-def test_structured_schema_rejects_contradictory_status():
-    with pytest.raises(ValueError):
-        GenerationPlan.model_validate(
-            {
-                "status": "insufficient",
-                "claims": [{"text": "Un fait.", "references": [{"evidence_id": "E"}]}],
-            }
-        )
-
-
 def test_evidence_identity_is_deterministic():
     documents = [narrative(section="Conditions")]
     assert (
@@ -406,7 +382,7 @@ def test_arbitrary_factual_text_cannot_bypass_validation_as_clarification():
 
 
 def test_omitted_evidence_is_disclosed_in_answer():
-    generator = generator_for(claim_plan)
+    generator = generator_for(claim_plan, verdict="insufficient")
     answer = generator.generate(
         "Quel est le délai ?", [narrative(), narrative("x" * 20000)]
     )
@@ -443,91 +419,21 @@ def test_malformed_legacy_table_is_invalid_evidence_not_context_limit():
     assert generator.last_trace["status"] == "invalid_evidence"
 
 
-def test_planner_receives_actual_output_schema_not_just_decoder_constraints():
-    generator = generator_for(
-        lambda entries: query_plan(entries, "min", column="Charge")
-    )
-    generator.generate("Quel est le minimum ?", [table_document()])
-    schema = json.loads(generator.chains[TablePlan].payload["output_schema"])
-    assert "column" in schema["properties"]
-    assert "min" in schema["properties"]["operation"]["enum"]
-    assert (
-        generator.last_trace["proposed_plan"]["table_queries"][0]["operation"] == "min"
-    )
-
-
-def test_audio_schema_does_not_consume_budget_with_unavailable_table_tools():
-    generator = generator_for(claim_plan)
-    generator.generate(
-        "Quelle règle de parole ?", [narrative("Le contrat commence lundi. " * 40)]
-    )
-    example = json.loads(generator.chains[NarrativePlan].payload["output_schema"])
-    assert NarrativePlan.model_validate(example).status == "answer"
-    assert "table_queries" not in example
-    assert generator.last_trace["omitted_evidence_count"] == 0
-
-
-def test_narrative_plan_cannot_request_a_hidden_table_tool():
-    with pytest.raises(ValueError):
-        NarrativePlan.model_validate(
-            {
-                "status": "answer",
-                "table_queries": [
-                    {"evidence_id": "invented", "operation": "max", "column": "Charge"}
-                ],
-            }
-        )
-
-
-def test_text_and_table_plans_share_the_same_status_consistency_rules():
-    for schema in (NarrativePlan, GenerationPlan):
-        with pytest.raises(ValueError):
-            schema.model_validate(
-                {"status": "insufficient", "clarification": "operation"}
-            )
-
-
 def test_output_language_never_translates_machine_protocol_values():
-    instruction = prompt_values("Quel est le maximum ?", "", TablePlan)[
+    instruction = prompt_values("Quel est le maximum ?", "", True)[
         "answer_language_instruction"
     ]
-    assert "for claim text only" in instruction
+    assert "for human-readable text only" in instruction
     assert "status/operation enums" in instruction
     assert "unchanged" in instruction
 
 
-def test_table_only_evidence_exposes_only_executable_table_answers():
-    generator = generator_for(
-        lambda entries: query_plan(entries, "max", column="Charge")
-    )
-    generator.generate("Quel est le maximum ?", [table_document()])
-    schema = json.loads(generator.chains[TablePlan].payload["output_schema"])
-    assert "operation" in schema["properties"]
-    assert "claims" not in schema["properties"]
-    assert "AnswerClaim" not in schema["$defs"]
-
-
-def test_mixed_evidence_keeps_both_narrative_and_table_capabilities():
-    generator = generator_for(claim_plan)
-    generator.generate("Quand commence le contrat ?", [narrative(), table_document()])
-    schema = json.loads(generator.chains[GenerationPlan].payload["output_schema"])
-    assert "claims" in schema["properties"]
-    assert "table_queries" in schema["properties"]
-    assert generator.last_trace["status"] == "answer"
-
-
 def test_table_planner_can_refuse_without_executing_an_operation():
-    generator = generator_for(lambda entries: query_plan(entries, "insufficient"))
+    generator = generator_for(lambda entries: {"status": "insufficient"})
     answer = generator.generate("Quel est le numéro de téléphone ?", [table_document()])
     assert "Je ne dispose pas" in answer
     assert generator.last_trace["status"] == "insufficient"
     assert not generator.last_trace.get("computations")
-
-
-def test_table_plan_decline_cannot_reach_arithmetic_executor():
-    plan = TablePlan(evidence_id="E", operation="clarify").as_generation_plan()
-    assert plan.status == "clarify"
-    assert plan.table_queries == []
 
 
 @pytest.mark.parametrize("verdict", ["contradicted", "insufficient"])
@@ -546,7 +452,7 @@ def test_wrong_entity_claim_is_not_displayed_when_verification_rejects_it(verdic
     assert "capteurs" not in answer
     assert "passages consultés" in answer
     assert generator.last_trace["status"] == "unverified"
-    assert generator.last_trace["verification"] == verdict
+    assert generator.last_trace["verification"]["verdicts"] == [verdict]
     assert generator.verifier.payload["question"] == question
 
 
@@ -558,23 +464,25 @@ def test_verified_claim_uses_only_its_original_cited_evidence():
     )
     answer = generator.generate("Que propose Orion ?", [cited, unrelated])
     payload = generator.verifier.payload
-    assert generator.last_trace["verification"] == "supported"
+    assert generator.last_trace["verification"]["verdicts"] == ["supported"]
     assert "Orion propose des capteurs" in answer
     assert len(payload["evidence"]) == 1
     assert next(iter(payload["evidence"].values()))["content"] == cited.page_content
     assert "page 3" in next(iter(payload["evidence"].values()))["citation"]
     assert set(payload["evidence"]) == {
-        payload["claims"][0]["references"][0]["evidence_id"]
+        payload["parts"][0]["claims"][0]["references"][0]["evidence_id"]
     }
 
 
-def test_table_calculations_do_not_trigger_narrative_verification():
+def test_table_query_meaning_is_checked_before_display():
     generator = generator_for(
         lambda entries: query_plan(entries, "max", column="Charge")
     )
     generator.generate("Quel est le maximum ?", [table_document()])
     assert generator.last_trace["status"] == "answer"
-    assert generator.verifier.payload is None
+    assert (
+        generator.verifier.payload["parts"][0]["table_queries"][0]["column"] == "Charge"
+    )
 
 
 def test_invalid_verifier_output_cannot_release_the_draft_answer():
@@ -583,7 +491,9 @@ def test_invalid_verifier_output_cannot_release_the_draft_answer():
     assert "commence lundi" not in answer
     assert generator.last_trace["status"] == "invalid_plan"
     with pytest.raises(ValueError):
-        GroundingCheck(verdict="supported", explanation="unvalidated field")
+        GroundingCheck(
+            coverage="complete", verdicts=["supported"], explanation="unvalidated field"
+        )
 
 
 def test_verification_budget_refuses_without_truncating_or_calling_the_model(
@@ -591,7 +501,7 @@ def test_verification_budget_refuses_without_truncating_or_calling_the_model(
 ):
     monkeypatch.setattr(settings, "ollama_num_ctx", 4096)
     monkeypatch.setattr(settings, "ollama_num_predict", 512)
-    generator = generator_for(lambda entries: claim_plan(entries, "Un fait. " * 200))
+    generator = generator_for(lambda entries: claim_plan(entries, "Un fait. " * 120))
     answer = generator.generate("Quel est le fait ?", [narrative("Un fait. " * 220)])
     assert generator.last_trace["verification"] == "context_limit"
     assert generator.verifier.payload is None
@@ -599,29 +509,50 @@ def test_verification_budget_refuses_without_truncating_or_calling_the_model(
     assert generator.last_trace["status"] == "context_limit"
 
 
-def test_verifier_budget_uses_its_own_short_output_limit(monkeypatch):
-    monkeypatch.setattr(settings, "ollama_num_ctx", 4096)
-    monkeypatch.setattr(settings, "ollama_num_predict", 512)
-    document = narrative("Contexte de la conversation. " * 94, source="appel.mp3")
-    evidence = evidence_from_documents([document])
-    references = [{"evidence_id": evidence[0].evidence_id}]
-    plan = GenerationPlan(
-        status="answer",
-        claims=[
-            {
-                "text": "La société Orion appelle l'agence Delta.",
-                "references": references,
-            },
-            {
-                "text": "L'agence Delta reçoit cet appel commercial.",
-                "references": references,
-            },
-        ],
+def test_decoder_schema_supports_multiple_parts_and_tools_without_locale_override():
+    schema = GenerationPlan.model_json_schema()
+    assert schema["properties"]["parts"]["maxItems"] == 6
+    assert (
+        PlannedTableQuery.model_json_schema()["properties"]["decimal_separator"]["type"]
+        == "null"
     )
-    generator = generator_for(claim_plan)
-    assert generator._verify_claims("Qui appelle qui ?", plan, evidence) == "supported"
-    payload = json.dumps(
-        generator.verifier.payload, ensure_ascii=False, separators=(",", ":")
+    for separator in (",", "."):
+        with pytest.raises(ValueError):
+            PlannedTableQuery(
+                evidence_id="E", operation="max", decimal_separator=separator
+            )
+
+
+@pytest.mark.parametrize("status", ["insufficient", "clarify"])
+def test_unresolved_parts_cannot_contain_facts(status):
+    with pytest.raises(ValueError):
+        AnswerPart(
+            request="Quand commence le contrat ?",
+            status=status,
+            clarification="scope" if status == "clarify" else None,
+            claims=[{"text": "lundi", "references": [{"evidence_id": "E"}]}],
+        )
+
+
+def test_prompt_shows_a_valid_parts_example_and_only_available_table_tools():
+    for has_tables in (False, True):
+        values = prompt_values("Quelle valeur ?", "", has_tables)
+        example = json.loads(values["output_schema"])
+        assert GenerationPlan.model_validate(example).parts[0].status == "answer"
+        assert ("calculations=" in values["planner_instruction"]) is has_tables
+
+
+def test_explicit_table_decision_criterion_is_not_treated_as_ambiguous_advice():
+    instruction = prompt_values(
+        "Selon le stock restant le plus faible, quel produit faut-il réapprovisionner ?",
+        "",
+        True,
+    )["planner_instruction"]
+
+    assert "exactly one part when the question has one request" in instruction
+    assert "never duplicate a request" in instruction
+    assert "explicitly supplies a decision criterion" in instruction
+    assert (
+        "needs neither a clarification nor a separate recommendation part"
+        in instruction
     )
-    size = len((VERIFICATION_PROMPT + payload).encode("utf-8"))
-    assert 4096 - 512 - 256 < size <= 4096 - VERIFICATION_OUTPUT_TOKENS - 256
