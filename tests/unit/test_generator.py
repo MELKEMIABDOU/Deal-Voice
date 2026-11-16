@@ -496,6 +496,24 @@ def test_invalid_verifier_output_cannot_release_the_draft_answer():
         )
 
 
+def test_single_part_claim_verdicts_are_combined_conservatively():
+    generator = generator_for(
+        claim_plan,
+        verdict=["supported", "supported"],
+    )
+    answer = generator.generate("Quand commence le contrat ?", [narrative()])
+    assert "commence lundi" in answer
+    assert generator.last_trace["verification"]["verdicts"] == ["supported"]
+
+    generator = generator_for(
+        claim_plan,
+        verdict=["supported", "insufficient"],
+    )
+    answer = generator.generate("Quand commence le contrat ?", [narrative()])
+    assert "commence lundi" not in answer
+    assert generator.last_trace["verification"]["verdicts"] == ["insufficient"]
+
+
 def test_verification_budget_refuses_without_truncating_or_calling_the_model(
     monkeypatch,
 ):

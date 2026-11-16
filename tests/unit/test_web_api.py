@@ -123,6 +123,13 @@ def test_status_and_documents_report_current_server_state(web_client):
     assert status.json()["ready"] is True
     assert status.json()["busy"] is False
     assert status.json()["model"] == settings.ollama_model_name
+    assert status.json()["transcription"] == {
+        "model": settings.whisper_model_name,
+        "device": settings.whisper_device,
+        "compute_type": settings.whisper_compute_type,
+        "language": settings.whisper_language,
+        "batch_size": settings.whisper_batch_size,
+    }
     assert status.json()["limits"] == {"files": 2, "upload_mb": 1, "audio_minutes": 3}
     documents = web_client.get("/api/v1/documents")
     assert documents.status_code == 200

@@ -157,8 +157,12 @@ def main() -> None:
             key="selected_documents",
             help="Les fichiers de même nom restent identifiés séparément.",
         )
-        whisper_model = "medium"
-        st.caption("Transcription WhisperX : medium · français · CPU int8")
+        whisper_model = settings.whisper_model_name
+        st.caption(
+            "Transcription WhisperX : "
+            f"{whisper_model} · {settings.whisper_language} · "
+            f"{settings.whisper_device} {settings.whisper_compute_type}"
+        )
 
         st.divider()
         if st.button("Migrer les documents historiques sans ID"):

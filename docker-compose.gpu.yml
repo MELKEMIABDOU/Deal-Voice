@@ -1,0 +1,11 @@
+services:
+  app:
+    gpus: all
+    environment:
+      WHISPER_MODEL_NAME: ${WHISPER_MODEL_NAME:-large-v3}
+      WHISPER_DEVICE: cuda
+      WHISPER_COMPUTE_TYPE: float16
+      WHISPER_BATCH_SIZE: ${WHISPER_BATCH_SIZE:-4}
+
+  ollama:
+    gpus: all

@@ -1,0 +1,22 @@
+services:
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      DEALVOICE_DOMAIN: ${DEALVOICE_DOMAIN}
+      DEALVOICE_BASIC_AUTH_USER: ${DEALVOICE_BASIC_AUTH_USER}
+      DEALVOICE_BASIC_AUTH_HASH: ${DEALVOICE_BASIC_AUTH_HASH}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -38,7 +38,10 @@ def cleanup_upload(document_id: str) -> None:
 
 
 def _parse_upload(
-    file_path: Path, document_id: str, content_sha256: str, whisper_model: str
+    file_path: Path,
+    document_id: str,
+    content_sha256: str,
+    whisper_model: str | None,
 ) -> list[Document]:
     suffix = file_path.suffix.lower()
     if suffix == ".pdf":
@@ -53,11 +56,11 @@ def _parse_upload(
             )
         documents = [
             WhisperXTranscriber(
-                model_name=whisper_model,
-                device="cpu",
-                compute_type="int8",
-                language="fr",
-                batch_size=1,
+                model_name=whisper_model or settings.whisper_model_name,
+                device=settings.whisper_device,
+                compute_type=settings.whisper_compute_type,
+                language=settings.whisper_language,
+                batch_size=settings.whisper_batch_size,
                 max_audio_duration_minutes=settings.max_audio_duration_minutes,
                 worker_timeout_seconds=settings.audio_worker_timeout_seconds,
                 worker_cpu_threads=settings.audio_worker_cpu_threads,
@@ -83,7 +86,7 @@ def _parse_upload(
 def index_uploaded_batch(
     uploads: list[tuple[Path, str, str]],
     get_search_engine: Callable[[], Any],
-    whisper_model: str = "medium",
+    whisper_model: str | None = None,
 ) -> None:
     """Parse the batch before committing its index, and roll back new uploads on error."""
     if not uploads:
@@ -127,7 +130,7 @@ def index_uploaded_file(
     document_id: str,
     content_sha256: str,
     search_engine: Any,
-    whisper_model: str = "medium",
+    whisper_model: str | None = None,
 ) -> None:
     """Index one already-persisted file using the application's shared resources."""
     index_uploaded_batch(

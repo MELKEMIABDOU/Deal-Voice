@@ -28,7 +28,7 @@ See [architecture and limits](docs/ARCHITECTURE.md) for the layer contracts.
 - FFmpeg available on `PATH`.
 - A Hugging Face token with access to the diarization models used by WhisperX.
 - Enough RAM for embeddings/reranking plus extraction or generation.
-  The upload pipeline currently uses WhisperX `medium`, French, CPU `int8`,
+  The upload pipeline defaults to WhisperX `medium`, French, CPU `int8`,
   batch size 1; installing a GPU alone does not change that configuration.
 
 Model downloads require network access on first use. Cache them before a client
@@ -116,6 +116,8 @@ transcription baseline. Generated reports stay local under `reports/`.
 Read [the client deployment guide](docs/CLIENT_WEB.md). The current portal has
 no built-in login; protect all remote access with authentication and HTTPS.
 The optional role header is a development filter, not authenticated identity.
+For the container stack, persistent volumes, GPU override and HTTPS proxy, read
+the [Docker deployment guide](docs/DOCKER_DEPLOYMENT.md).
 
 One expensive operation runs at a time. Other operations can receive HTTP 409.
 Import state is held in memory and is lost on restart. `/health` checks the

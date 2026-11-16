@@ -394,8 +394,23 @@ class RAGGenerator:
             raw.model_dump() if isinstance(raw, BaseModel) else raw
         )
         if len(review.verdicts) != len(plan.parts):
-            raise ValueError("The reviewer must assess every part exactly once.")
+            review = self._align_review_verdicts(review, len(plan.parts))
         return review
+
+    @staticmethod
+    def _align_review_verdicts(
+        review: GroundingCheck, part_count: int
+    ) -> GroundingCheck:
+        """Conservatively combine claim-level verdicts for one answer part."""
+        if part_count != 1 or not review.verdicts:
+            raise ValueError("The reviewer must assess every part exactly once.")
+        if "contradicted" in review.verdicts:
+            verdict = "contradicted"
+        elif "insufficient" in review.verdicts:
+            verdict = "insufficient"
+        else:
+            verdict = "supported"
+        return review.model_copy(update={"verdicts": [verdict]})
 
     @staticmethod
     def _compact_computation(index: int, computation: dict) -> dict:

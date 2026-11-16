@@ -6,11 +6,20 @@ from qdrant_client import QdrantClient, models
 from deal_voice.config import settings
 
 
+def create_qdrant_client(
+    *, path: str, url: str | None = None, api_key: str | None = None
+) -> QdrantClient:
+    """Connect to Qdrant Server when configured, otherwise use local storage."""
+    if url:
+        return QdrantClient(url=url, api_key=api_key or None)
+    return QdrantClient(path=path)
+
+
 def ensure_collection_schema(
     client: QdrantClient,
     collection_name: str,
     vector_size: int,
-    db_path: str,
+    parent_docstore_path: str,
 ) -> None:
     """Create or migrate a local collection to the configured vector size."""
     if client.collection_exists(collection_name):
@@ -25,7 +34,7 @@ def ensure_collection_schema(
                 )
             client.delete_collection(collection_name)
             shutil.rmtree(
-                Path(db_path) / "parent_docstore",
+                Path(parent_docstore_path),
                 ignore_errors=True,
             )
 

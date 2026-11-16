@@ -14,8 +14,10 @@ provenance is not preserved by the current Markdown-only export.
 
 Audio: WhisperX transcribes, aligns and diarizes in a child process. The
 application saves Markdown/JSON artifacts, then indexes parent passages made
-from speaker turns, with overlap. The upload path uses medium/fr/cpu/int8 and
-batch size 1. Benchmark CLI options do not change these upload defaults.
+from speaker turns, with overlap. Upload transcription defaults to
+medium/fr/cpu/int8 and batch size 1, and can be configured through the
+`WHISPER_*` environment settings. Benchmark CLI options do not change these
+upload settings.
 
 The shared worker transport limits extraction concurrency and execution time.
 Heavy model allocations belong to the child. On Windows a Job Object contains

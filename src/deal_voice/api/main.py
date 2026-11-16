@@ -63,6 +63,13 @@ def server_status():
         and hasattr(app.state, "generator"),
         "busy": app.state.operation_lock.locked(),
         "model": settings.ollama_model_name,
+        "transcription": {
+            "model": settings.whisper_model_name,
+            "device": settings.whisper_device,
+            "compute_type": settings.whisper_compute_type,
+            "language": settings.whisper_language,
+            "batch_size": settings.whisper_batch_size,
+        },
         "limits": {
             "files": settings.max_upload_files,
             "upload_mb": settings.max_upload_size_mb,

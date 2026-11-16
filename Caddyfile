@@ -1,0 +1,9 @@
+{$DEALVOICE_DOMAIN} {
+    encode zstd gzip
+
+    basic_auth {
+        {$DEALVOICE_BASIC_AUTH_USER} {$DEALVOICE_BASIC_AUTH_HASH}
+    }
+
+    reverse_proxy app:8000
+}

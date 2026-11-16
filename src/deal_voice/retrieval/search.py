@@ -8,7 +8,7 @@ from langchain_classic.storage import EncoderBackedStore, LocalFileStore
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_qdrant import QdrantVectorStore
-from qdrant_client import QdrantClient, models
+from qdrant_client import models
 from sentence_transformers import CrossEncoder
 
 from deal_voice.config import settings
@@ -20,7 +20,10 @@ from deal_voice.ingestion.indexer import (
 from deal_voice.ingestion.indexer import (
     migrate_legacy_documents as migrate_legacy_index_entries,
 )
-from deal_voice.ingestion.qdrant_schema import ensure_collection_schema
+from deal_voice.ingestion.qdrant_schema import (
+    create_qdrant_client,
+    ensure_collection_schema,
+)
 
 
 class LocalSearchEngine:
@@ -33,6 +36,9 @@ class LocalSearchEngine:
         use_reranker: bool = True,
         candidate_pool_size: int = 30,
         rerank_batch_size: int = 1,
+        qdrant_url: str | None = settings.qdrant_url,
+        qdrant_api_key: str | None = settings.qdrant_api_key,
+        parent_docstore_path: str | None = None,
     ):
         if (
             type(candidate_pool_size) is not int
@@ -44,7 +50,14 @@ class LocalSearchEngine:
         self.collection_name = collection_name
         self.candidate_pool_size = candidate_pool_size
         self.rerank_batch_size = rerank_batch_size
-        self.client = QdrantClient(path=db_path)
+        self.client = create_qdrant_client(
+            path=db_path, url=qdrant_url, api_key=qdrant_api_key
+        )
+        parent_docstore_path = parent_docstore_path or (
+            settings.parent_docstore_path
+            if db_path == settings.qdrant_storage_path
+            else f"{db_path}/parent_docstore"
+        )
         try:
             self.embeddings = HuggingFaceEmbeddings(
                 model_name=settings.embedding_model_name
@@ -56,7 +69,7 @@ class LocalSearchEngine:
                 self.client,
                 self.collection_name,
                 settings.embedding_vector_size,
-                db_path,
+                parent_docstore_path,
             )
             self.vector_store = QdrantVectorStore(
                 client=self.client,
@@ -64,7 +77,7 @@ class LocalSearchEngine:
                 embedding=self.embeddings,
             )
             self.docstore = EncoderBackedStore(
-                store=LocalFileStore(f"{db_path}/parent_docstore"),
+                store=LocalFileStore(parent_docstore_path),
                 key_encoder=lambda key: key,
                 value_serializer=lambda doc: json.dumps(doc.model_dump()).encode(
                     "utf-8"

@@ -16,7 +16,10 @@ from qdrant_client import QdrantClient, models
 
 from deal_voice.config import settings
 from deal_voice.evidence.tabular import parse_markdown_table
-from deal_voice.ingestion.qdrant_schema import ensure_collection_schema
+from deal_voice.ingestion.qdrant_schema import (
+    create_qdrant_client,
+    ensure_collection_schema,
+)
 
 
 def _file_sha256(path: Path) -> str | None:
@@ -176,9 +179,19 @@ class EnterpriseIndexer:
         collection_name: str = settings.collection_name,
         client: QdrantClient | None = None,
         embeddings: Embeddings | None = None,
+        qdrant_url: str | None = settings.qdrant_url,
+        qdrant_api_key: str | None = settings.qdrant_api_key,
+        parent_docstore_path: str | None = None,
     ):
         self.collection_name = collection_name
-        self.client = client or QdrantClient(path=db_path)
+        self.client = client or create_qdrant_client(
+            path=db_path, url=qdrant_url, api_key=qdrant_api_key
+        )
+        parent_docstore_path = parent_docstore_path or (
+            settings.parent_docstore_path
+            if db_path == settings.qdrant_storage_path
+            else f"{db_path}/parent_docstore"
+        )
         self._owns_client = client is None
         self.embeddings = (
             embeddings
@@ -189,7 +202,7 @@ class EnterpriseIndexer:
             self.client,
             self.collection_name,
             settings.embedding_vector_size,
-            db_path,
+            parent_docstore_path,
         )
 
         self.vector_store = QdrantVectorStore(
@@ -198,7 +211,7 @@ class EnterpriseIndexer:
             embedding=self.embeddings,
         )
 
-        fs = LocalFileStore(f"{db_path}/parent_docstore")
+        fs = LocalFileStore(parent_docstore_path)
         self.docstore = EncoderBackedStore(
             store=fs,
             key_encoder=lambda x: x,
