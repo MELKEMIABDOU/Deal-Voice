@@ -588,7 +588,15 @@ def test_prompt_shows_a_valid_parts_example_and_only_available_table_tools():
         values = prompt_values("Quelle valeur ?", "", has_tables)
         example = json.loads(values["output_schema"])
         assert GenerationPlan.model_validate(example).parts[0].status == "answer"
+        assert example["parts"][0]["claims"]
         assert ("calculations=" in values["planner_instruction"]) is has_tables
+
+
+def test_mixed_evidence_prompt_keeps_narrative_claims_available():
+    values = prompt_values("Quelle inquiétude est exprimée ?", "", True)
+
+    assert "Narrative evidence still uses claims" in values["planner_instruction"]
+    assert "claims" in json.loads(values["output_schema"])["parts"][0]
 
 
 def test_explicit_table_decision_criterion_is_not_treated_as_ambiguous_advice():

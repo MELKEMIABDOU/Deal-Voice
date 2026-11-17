@@ -27,7 +27,8 @@ NARRATIVE_INSTRUCTION = (
 
 TABLE_TOOLS = (
     " Tables show metadata only; Python holds the rows. Missing rows in this prompt do NOT "
-    "mean missing data. Use table_queries, never table claims or mental arithmetic. "
+    "mean missing data. For facts stored in tables, use table_queries, never table claims "
+    "or mental arithmetic. Narrative evidence still uses claims. "
     "Exact evidence_id/column; select/min/max/sum/mean/count/sort. "
     "Top N: sort, descending=true, limit=N; bottom N: descending=false. "
     "If several measures fit and none is specified, clarify column; never substitute a different "
@@ -78,11 +79,13 @@ def answer_language(question: str) -> str:
 
 
 def prompt_values(question: str, context: str, has_tables: bool) -> dict[str, str]:
-    part = {"request": "...", "status": "answer"}
+    part = {
+        "request": "...",
+        "status": "answer",
+        "claims": [{"text": "...", "references": [{"evidence_id": "..."}]}],
+    }
     if has_tables:
         part["table_queries"] = [{"evidence_id": "...", "operation": "select"}]
-    else:
-        part["claims"] = [{"text": "...", "references": [{"evidence_id": "..."}]}]
     return {
         "question": question,
         "context": context,

@@ -194,6 +194,33 @@ def test_reranker_orders_candidates_even_when_all_fit_top_k():
     ]
 
 
+def test_overlapping_audio_context_precedes_unrelated_documents():
+    first = Document(
+        page_content="The person is introduced",
+        metadata={"source": "call.mp3", "start_time": 0.0, "end_time": 60.0},
+    )
+    neighbour = Document(
+        page_content="The person gives the answer",
+        metadata={"source": "call.mp3", "start_time": 55.0, "end_time": 90.0},
+    )
+    unrelated = Document(
+        page_content="Unrelated report",
+        metadata={"source": "report.pdf", "content_kind": "table"},
+    )
+
+    class Reranker:
+        def predict(self, pairs, **kwargs):
+            return [0.9, 0.1, 0.4]
+
+    engine = make_engine([first, neighbour, unrelated], reranker=Reranker())
+
+    assert [document.page_content for document in engine.search("question")] == [
+        "The person is introduced",
+        "The person gives the answer",
+        "Unrelated report",
+    ]
+
+
 def test_clear_reranker_score_gap_removes_unrelated_context():
     class Reranker:
         def predict(self, pairs, **kwargs):

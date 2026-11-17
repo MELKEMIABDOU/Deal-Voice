@@ -187,8 +187,52 @@ class LocalSearchEngine:
                 key=lambda document: document.metadata["rerank_score"], reverse=True
             )
         self._promote_exact_table_header(query, candidates)
+        self._promote_overlapping_audio_context(candidates)
         candidates = self._filter_dominated_candidates(candidates)
         return candidates[:top_k]
+
+    @staticmethod
+    def _promote_overlapping_audio_context(candidates: list[Document]) -> None:
+        """Keep overlapping turns from one recording next to each other.
+
+        Cross-encoders can rank the passage naming a person above the overlapping
+        passage containing that person's statement. Keeping the pair adjacent
+        prevents unrelated documents from consuming the generation budget between
+        them. Exact table-header promotion remains intact because the existing
+        first candidate is never displaced.
+        """
+        ordered: list[Document] = []
+        remaining = list(candidates)
+        while remaining:
+            anchor = remaining.pop(0)
+            ordered.append(anchor)
+            metadata = anchor.metadata
+            start = metadata.get("start_time")
+            end = metadata.get("end_time")
+            source = metadata.get("source")
+            if (
+                not source
+                or not isinstance(start, (int, float))
+                or not isinstance(end, (int, float))
+            ):
+                continue
+            neighbours = []
+            others = []
+            for document in remaining:
+                candidate = document.metadata
+                candidate_start = candidate.get("start_time")
+                candidate_end = candidate.get("end_time")
+                overlaps = (
+                    candidate.get("source") == source
+                    and isinstance(candidate_start, (int, float))
+                    and isinstance(candidate_end, (int, float))
+                    and candidate_start <= end
+                    and candidate_end >= start
+                )
+                (neighbours if overlaps else others).append(document)
+            ordered.extend(neighbours)
+            remaining = others
+        candidates[:] = ordered
 
     @classmethod
     def _filter_dominated_candidates(cls, candidates: list[Document]) -> list[Document]:
