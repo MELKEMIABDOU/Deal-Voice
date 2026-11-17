@@ -165,6 +165,9 @@ uv run --no-sync python scripts/evaluate_rag.py --questions data/evaluation/ques
 ```
 
 Fact recall is lexical presence with explicit variants, not semantic correctness.
+Known ASR spelling variants for names must be declared per question with
+`expected_fact_variants`; the evaluator does not apply global fuzzy matching that
+could confuse two different people.
 Citation checks validate filenames/locators, not whether they support each claim.
 Unavailable checks are reported separately. Review answers manually, including
 entity attribution, negation, missing evidence and false refusals.
