@@ -119,6 +119,12 @@ class QueryResponse(BaseModel):
     retrieval_status: str = "initial"
     evidence_coverage: str = "insufficient"
     corrective_search_used: bool = False
+    # Only executed, accepted values and the authorized evidence catalog.
+    # Never expose the proposed plan or model-internal reasoning.
+    actual_values: list[dict[str, str]] | None = None
+    available_citations: list[dict[str, str | int | float]] = Field(
+        default_factory=list
+    )
 
 
 def get_current_user_role(x_user_role: str | None = Header(default=None)) -> str | None:
@@ -208,7 +214,11 @@ def secure_rag_search(
         ]
 
         generation_status = trace.get("status", "unknown")
-        answer_status = _answer_status(generation_status, retrieval.coverage.status)
+        answer_status = _answer_status(
+            generation_status,
+            retrieval.coverage.status,
+            table_scope_limited=trace.get("table_scope_limited", False),
+        )
         return QueryResponse(
             query=query_request.query,
             authorized_role=user_role,
@@ -220,6 +230,8 @@ def secure_rag_search(
             retrieval_status=retrieval.retrieval_status,
             evidence_coverage=retrieval.coverage.status,
             corrective_search_used=retrieval.corrective_search_used,
+            actual_values=trace.get("actual_values"),
+            available_citations=trace.get("structured_citations", []),
         )
 
     except Exception:
@@ -232,11 +244,20 @@ def secure_rag_search(
         lock.release()
 
 
-def _answer_status(generation_status: str, evidence_coverage: str) -> str:
+def _answer_status(
+    generation_status: str,
+    evidence_coverage: str,
+    *,
+    table_scope_limited: bool = False,
+) -> str:
     """Expose a stable client status independently from internal pipeline states."""
     if generation_status == "answer":
-        return "complete" if evidence_coverage == "complete" else "partial"
-    if generation_status in {"partial", "context_limit"}:
+        return (
+            "complete"
+            if evidence_coverage == "complete" and not table_scope_limited
+            else "partial"
+        )
+    if generation_status == "partial":
         return "partial"
     if generation_status == "insufficient":
         return "insufficient"

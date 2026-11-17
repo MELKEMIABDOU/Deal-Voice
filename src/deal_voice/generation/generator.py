@@ -335,6 +335,14 @@ class RAGGenerator:
                 part_statuses=statuses,
                 actual_values=values or None,
                 computations=computations,
+                table_scope_limited=any(
+                    item.document.metadata.get("table_source_complete") is not True
+                    for item in included
+                    if any(
+                        computation["query"]["evidence_id"] == item.evidence_id
+                        for computation in computations
+                    )
+                ),
             )
         )
         return "\n\n".join(paragraphs)
@@ -353,9 +361,12 @@ class RAGGenerator:
             for claim in part.claims
             for ref in claim.references
         } | {query.evidence_id for part in plan.parts for query in part.table_queries}
+        # A refusal or clarification cannot be checked against an empty catalog.
+        # The reviewer needs all evidence the planner saw to judge missing data.
+        unresolved = any(part.status != "answer" for part in plan.parts)
         catalog = {}
         for item in evidence:
-            if item.evidence_id not in used:
+            if item.evidence_id not in used and not unresolved:
                 continue
             entry = {"citation": item.citation()}
             if item.document.metadata.get("content_kind") == "table":

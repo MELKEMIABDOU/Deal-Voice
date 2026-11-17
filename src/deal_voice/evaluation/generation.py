@@ -89,6 +89,7 @@ class GenerationEvaluation:
             and not self.forbidden_claims_found
             and not self.invalid_citation_details
             and not self.value_relations_missing
+            and not self.value_relations_not_evaluable
         )
 
 

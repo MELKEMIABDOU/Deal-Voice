@@ -94,6 +94,41 @@ def test_unknown_participants_are_explicit_without_erasing_meeting_subject():
     assert generator.last_trace["part_statuses"] == ["answer", "insufficient"]
 
 
+@pytest.mark.parametrize("status", ["insufficient", "clarify"])
+def test_unresolved_request_is_reviewed_against_all_available_evidence(
+    inventory, status
+):
+    part = {"status": status}
+    if status == "clarify":
+        part["clarification"] = "column"
+    generator = generator_for(lambda _: part)
+    generator.generate(
+        "Quel est le prix maximal ?",
+        [inventory, narrative("Les prix sont des prix de détail.")],
+    )
+    evidence = list(generator.verifier.payload["evidence"].values())
+    assert len(evidence) == 2
+    assert evidence[0]["columns"] == [
+        "Code",
+        "Article",
+        "Prix",
+        "Marge",
+        "Stock",
+        "Seuil",
+    ]
+    assert evidence[1]["content"] == "Les prix sont des prix de détail."
+
+
+def test_reviewer_can_reject_a_false_refusal_when_a_table_is_available(inventory):
+    generator = generator_for(
+        lambda _: {"status": "insufficient"}, verdict="contradicted"
+    )
+    generator.generate("Quel est le prix maximal ?", [inventory])
+    assert generator.verifier.payload["evidence"]
+    assert generator.last_trace["status"] == "unverified"
+    assert generator.last_trace["actual_values"] is None
+
+
 def test_wrong_metric_rejection_blocks_valid_but_irrelevant_arithmetic(inventory):
     generator = generator_for(
         lambda entries: query_plan(entries, "max", column="Marge"),
@@ -289,6 +324,78 @@ def test_single_part_spelling_correction_does_not_reject_valid_plan(inventory):
     assert "Quel critère" in answer
     assert generator.last_trace["status"] == "clarify"
     assert generator.last_trace["proposed_plan"]["parts"][0]["request"] == question
+
+
+@pytest.mark.parametrize("status", ["answer", "insufficient", "clarify"])
+def test_identical_parts_are_reviewed_and_displayed_once(inventory, status):
+    def response(entries):
+        part = (
+            answered(entries, "Quel prix ?")
+            if status == "answer"
+            else {"request": "Quel prix ?", "status": status}
+        )
+        if status == "clarify":
+            part["clarification"] = "column"
+        return {"parts": [part, {**part, "request": "  QUEL PRIX ?  "}]}
+
+    generator = generator_for(response)
+    answer = generator.generate("Quel prix ?", [inventory])
+    assert "(2)" not in answer
+    assert len(generator.last_trace["proposed_plan"]["parts"]) == 1
+    assert len(generator.verifier.payload["parts"]) == 1
+    assert generator.last_trace["part_statuses"] == [status]
+
+
+def test_identical_operations_on_different_scopes_are_not_deduplicated():
+    plan = GenerationPlan.model_validate(
+        {
+            "parts": [
+                {
+                    "request": "Maximum nord",
+                    **query_plan([{"evidence_id": "north"}], "max", column="Prix"),
+                },
+                {
+                    "request": "Maximum sud",
+                    **query_plan([{"evidence_id": "south"}], "max", column="Prix"),
+                },
+            ]
+        }
+    )
+    assert len(plan.parts) == 2
+
+
+@pytest.mark.parametrize(
+    "descending,expected", [(True, ["C", "D", "B"]), (False, ["A", "B", "D"])]
+)
+def test_top_three_is_computed_over_every_row(descending, expected):
+    document = Document(
+        page_content="| Code | Tarif |\n| --- | --- |\n| A | 2,00 € |\n| B | 9,00 € |\n| C | 30,00 € |\n| D | 12,00 € |",
+        metadata={
+            "source": "tarifs.pdf",
+            "content_kind": "table",
+            "table_complete": True,
+        },
+    )
+    generator = generator_for(
+        lambda entries: query_plan(
+            entries, "sort", column="Tarif", descending=descending, limit=3
+        )
+    )
+    answer = generator.generate("Donne trois articles selon le tarif.", [document])
+    computation = generator.last_trace["computations"][0]
+    assert [row[0] for row in computation["result"]["rows"]] == expected
+    assert computation["input_row_count"] == 4
+    assert "Source : tarifs.pdf" in answer
+    assert generator.last_trace["table_scope_limited"] is True
+
+
+def test_uncertain_unused_table_does_not_downgrade_verified_table_scope(inventory):
+    inventory.metadata["table_source_complete"] = True
+    other = inventory.model_copy(deep=True)
+    other.metadata.update(source="autre.pdf", table_source_complete=False)
+    generator = generator_for(lambda entries: query_plan(entries, "max", column="Prix"))
+    generator.generate("Quel prix maximal ?", [inventory, other])
+    assert generator.last_trace["table_scope_limited"] is False
 
 
 def test_semantic_subrequest_labels_do_not_need_to_quote_the_question(inventory):

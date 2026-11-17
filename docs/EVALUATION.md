@@ -3,6 +3,68 @@
 Run commands from the repository root. Software tests and real-model evaluation
 are separate: passing tests does not demonstrate answer accuracy.
 
+See the [accuracy review and client acceptance cases](ACCURACY_REVIEW.md) for the
+current limitations. The CLI generation evaluations call search and generation
+directly; they do not exercise the API's corrective retrieval path. Test the
+deployed `/api/v1/search` endpoint as well before accepting a client release.
+
+## Client API acceptance (recommended before deployment)
+
+`scripts/evaluate_client.py` exercises the same `/api/v1/search` route as the web
+portal, including corrective retrieval, generation and final verification. It
+does not load embeddings, Whisper or an LLM in the evaluation process. The API
+must already be running and the documents indexed. The server still performs
+real inference, so run one batch at a time on suitable hardware.
+
+Before starting, verify `http://127.0.0.1:8000/api/v1/status`. The script performs
+this check itself and exits clearly if the API is stopped or not ready; in that
+case no RAG answer has been evaluated.
+
+```powershell
+uv run --no-sync python scripts/evaluate_client.py --questions data/evaluation/questions.jsonl --offset 0 --limit 5 --output reports/rag/client-01-05.json
+```
+
+Next batch: `--offset 5 --limit 5 --output reports/rag/client-06-10.json`, then
+offsets 10, 15, etc. through 45. On the VM, with the application container already
+running, use its Python environment. The runtime image does not include scripts
+or evaluation data, so copy just the required files to its temporary directory:
+
+```bash
+dc() { docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.gpu.yml "$@"; }
+dc cp scripts/evaluate_client.py app:/tmp/evaluate_client.py
+dc cp data/evaluation/questions.jsonl app:/tmp/questions.jsonl
+dc exec app python /tmp/evaluate_client.py --questions /tmp/questions.jsonl --offset 0 --limit 5 --output /tmp/client-01-05.json
+mkdir -p reports/rag
+dc cp app:/tmp/client-01-05.json reports/rag/client-01-05.json
+```
+
+The script defaults to `http://127.0.0.1:8000`. Use `--api-url` for another local
+port or an SSH tunnel. It does not bypass the public proxy's authentication;
+the container command accesses the internal API. `--document-id` (repeatable)
+explicitly reproduces the portal's document selection; expected source names
+are **never** used as hidden search filters. `--role` is only needed if the
+existing API has RBAC enabled.
+
+Each completed response is saved atomically with its retrieved passages,
+statuses, verified numeric values, citations, latency and failed checks. A
+timeout or HTTP error stops the run without retrying: the API may still be
+processing the request. Check the server before resuming. Existing report names
+are refused to preserve earlier evidence. Copy the report out of the container
+even if the test reports failed checks (exit code 1); `/tmp/` is not persistent.
+
+`checks_passed` is the existing lexical/reference evaluation. `accepted` also
+requires the expected API status: `complete` for answer questions or
+`insufficient` for refusal questions. A correct but explicitly limited table
+result can therefore have `checks_passed=true` and `accepted=false`. An unknown
+entity/value relationship, missing citation detail, validation error or context
+capacity failure cannot count as acceptance. Requirements are not removed just
+because retrieval failed to provide them. Interrupted runs have no overall rate.
+
+These automated checks do **not** prove semantic accuracy, correct ranking or
+absence of hallucinations. Review each answer against the source; test ambiguous
+requests, paraphrases, contradictions and new documents manually too. Record the
+commit, model/configuration and indexed document versions with the report.
+
 ## Default tests (no real model inference)
 
 ```powershell

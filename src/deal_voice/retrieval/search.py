@@ -169,7 +169,9 @@ class LocalSearchEngine:
         for parent_key in header_parent_keys:
             append_candidate(parents.get(parent_key), parent_key)
 
-        if self.reranker is not None and len(candidates) > top_k:
+        # Ordering still matters when every candidate fits top_k: generation
+        # packs them in rank order and may have room for only the first ones.
+        if self.reranker is not None and len(candidates) > 1:
             scores = self.reranker.predict(
                 [[query, document.page_content] for document in candidates],
                 batch_size=self.rerank_batch_size,

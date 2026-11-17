@@ -567,10 +567,25 @@ def test_explicit_table_decision_criterion_is_not_treated_as_ambiguous_advice():
         True,
     )["planner_instruction"]
 
-    assert "exactly one part when the question has one request" in instruction
+    assert "One part per independent request" in instruction
     assert "never duplicate a request" in instruction
-    assert "explicitly supplies a decision criterion" in instruction
-    assert (
-        "needs neither a clarification nor a separate recommendation part"
-        in instruction
+    assert "An explicit criterion needs one operation" in instruction
+
+
+def test_multiple_table_catalogs_fit_small_context_without_loading_rows(monkeypatch):
+    monkeypatch.setattr(settings, "ollama_num_ctx", 4096)
+    monkeypatch.setattr(settings, "ollama_num_predict", 512)
+    documents = []
+    for i in range(5):
+        document = table_document()
+        document.metadata["table_id"] = f"table-{i}"
+        document.metadata["table_title"] = f"Catalogue {i}"
+        documents.append(document)
+    generator = generator_for(
+        lambda entries: {"status": "clarify", "clarification": "column"}
     )
+    answer = generator.generate("Donne trois articles les plus chers.", documents)
+    assert generator.last_trace["omitted_evidence_count"] == 0
+    assert "Quelle colonne" in answer
+    assert len(generator.chain.payload["context"].splitlines()) == 6
+    assert "9,75" not in generator.chain.payload["context"]

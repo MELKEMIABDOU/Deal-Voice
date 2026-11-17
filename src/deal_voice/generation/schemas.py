@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from deal_voice.evidence.tabular import TableQuery
+from deal_voice.evidence.tabular import TableQuery, normalized_label
 
 
 class EvidenceReference(BaseModel):
@@ -83,6 +83,19 @@ class AnswerPart(BaseModel):
 class GenerationPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     parts: list[AnswerPart] = Field(min_length=1, max_length=6)
+
+    @model_validator(mode="after")
+    def deduplicate_parts(self):
+        """Remove repeated requests only when their entire plans also agree."""
+        unique, seen = [], []
+        for part in self.parts:
+            signature = part.model_dump()
+            signature["request"] = normalized_label(part.request).strip(" ?.!;:")
+            if signature not in seen:
+                seen.append(signature)
+                unique.append(part)
+        self.parts = unique
+        return self
 
 
 class GroundingCheck(BaseModel):

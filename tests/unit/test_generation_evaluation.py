@@ -349,6 +349,7 @@ def test_legacy_text_value_presence_does_not_claim_verified_relations():
     assert result.value_relations_found == []
     assert result.value_relations_missing == []
     assert result.value_relations_not_evaluable == ["Article A / Montant / 10 €"]
+    assert not result.passed
 
 
 def test_missing_locator_in_available_metadata_does_not_prove_invented_locator():

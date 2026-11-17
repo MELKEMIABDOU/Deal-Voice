@@ -99,6 +99,8 @@ def test_search_route_returns_generated_answer(api_client: TestClient):
         "retrieval_status": "initial",
         "evidence_coverage": "complete",
         "corrective_search_used": False,
+        "actual_values": None,
+        "available_citations": [],
     }
 
     assert api_client.app.state.search_engine.calls == [
@@ -130,6 +132,53 @@ def test_semantic_insufficiency_triggers_exactly_one_corrective_search():
     assert len(engine.calls) == 2
     assert "tableau complet et source complète" in engine.calls[1]["query"]
     assert engine.calls[1]["user_role"] == "sales"
+
+
+@pytest.mark.parametrize("limited,status", [(True, "partial"), (False, "complete")])
+def test_table_scope_limits_are_visible_to_the_client(api_client, limited, status):
+    api_client.app.state.generator.last_trace = {
+        "status": "answer",
+        "table_scope_limited": limited,
+    }
+    response = api_client.post(
+        "/api/v1/search",
+        json={"query": "Quel est le prix maximal ?"},
+        headers={"X-User-Role": "sales"},
+    )
+    assert response.status_code == 200
+    assert response.json()["answer_status"] == status
+    assert response.json()["generation_status"] == "answer"
+
+
+def test_response_exposes_accepted_values_but_not_the_model_plan(api_client):
+    values = [{"entity": "Article A", "field": "Prix", "value": "10 €"}]
+    citations = [{"file": "pricing.pdf", "table": "Tarifs", "page": 2}]
+    api_client.app.state.generator.last_trace = {
+        "status": "answer",
+        "actual_values": values,
+        "structured_citations": citations,
+        "proposed_plan": {"private": "not part of the API contract"},
+    }
+    response = api_client.post(
+        "/api/v1/search",
+        json={"query": "Quel prix ?"},
+        headers={"X-User-Role": "sales"},
+    )
+    assert response.status_code == 200
+    assert response.json()["actual_values"] == values
+    assert response.json()["available_citations"] == citations
+    assert "proposed_plan" not in response.json()
+
+
+def test_context_capacity_failure_is_not_labeled_as_a_partial_answer(api_client):
+    api_client.app.state.generator.last_trace = {"status": "context_limit"}
+    response = api_client.post(
+        "/api/v1/search",
+        json={"query": "Quel contenu ?"},
+        headers={"X-User-Role": "sales"},
+    )
+    assert response.status_code == 200
+    assert response.json()["answer_status"] == "unverified"
 
 
 @pytest.mark.parametrize(

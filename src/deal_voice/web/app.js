@@ -275,7 +275,7 @@ function showResponse(card, response) {
     sources.forEach((source, index) => {
       const details = node("details", "source");
       details.append(node("summary", "", sourceCaption(source, index)));
-      if (source.content_kind === "table") details.append(node("p", "source-note", source.table_complete === true ? "Tableau complet extrait." : "Extrait de tableau incomplet."));
+      if (source.content_kind === "table") details.append(node("p", "source-note", source.table_complete === true ? "Bloc extrait entier ; l’exhaustivité du document source reste à vérifier." : "Extrait de tableau incomplet."));
       details.append(node("pre", "source-content", source.content || ""));
       wrapper.append(details);
     });

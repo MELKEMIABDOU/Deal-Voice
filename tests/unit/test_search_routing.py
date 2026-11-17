@@ -179,6 +179,21 @@ def test_exact_table_header_match_reaches_generation_before_related_results():
     assert len(results) == 3
 
 
+def test_reranker_orders_candidates_even_when_all_fit_top_k():
+    class Reranker:
+        def predict(self, pairs, **kwargs):
+            return [0.1, 0.9]
+
+    engine = make_engine(
+        [Document(page_content="Related"), Document(page_content="Relevant")],
+        reranker=Reranker(),
+    )
+    assert [doc.page_content for doc in engine.search("question", top_k=5)] == [
+        "Relevant",
+        "Related",
+    ]
+
+
 def test_one_generic_header_term_does_not_override_semantic_ranking():
     semantic = Document(
         page_content="Réponse précise", metadata={"content_kind": "text"}
