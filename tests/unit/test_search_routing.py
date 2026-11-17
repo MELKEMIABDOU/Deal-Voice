@@ -194,6 +194,52 @@ def test_reranker_orders_candidates_even_when_all_fit_top_k():
     ]
 
 
+def test_clear_reranker_score_gap_removes_unrelated_context():
+    class Reranker:
+        def predict(self, pairs, **kwargs):
+            return [0.92, 0.008, 0.002]
+
+    engine = make_engine(
+        [
+            Document(page_content="Relevant call"),
+            Document(page_content="Unrelated table"),
+            Document(page_content="Unrelated report"),
+        ],
+        reranker=Reranker(),
+    )
+    results = engine.search("Who called?", top_k=3)
+    assert [document.page_content for document in results] == ["Relevant call"]
+
+
+def test_comparable_reranker_scores_preserve_multi_passage_context():
+    class Reranker:
+        def predict(self, pairs, **kwargs):
+            return [0.8, 0.2, 0.09]
+
+    documents = [Document(page_content=f"Evidence {index}") for index in range(3)]
+    engine = make_engine(documents, reranker=Reranker())
+    assert len(engine.search("Compare the evidence", top_k=3)) == 3
+
+
+def test_exact_header_match_survives_a_dominant_semantic_candidate():
+    semantic = Document(page_content="Strong semantic answer")
+    exact_table = Document(
+        page_content="| Produit | Stock restant |\n| --- | --- |\n| A | 3 |",
+        metadata={"content_kind": "table"},
+    )
+
+    class Reranker:
+        def predict(self, pairs, **kwargs):
+            return [0.95, 0.001]
+
+    engine = make_engine([semantic, exact_table], reranker=Reranker())
+    results = engine.search("Quel produit a le stock restant minimal ?", top_k=2)
+    assert [document.page_content for document in results] == [
+        exact_table.page_content,
+        semantic.page_content,
+    ]
+
+
 def test_one_generic_header_term_does_not_override_semantic_ranking():
     semantic = Document(
         page_content="Réponse précise", metadata={"content_kind": "text"}

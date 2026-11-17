@@ -28,6 +28,7 @@ from deal_voice.ingestion.qdrant_schema import (
 
 class LocalSearchEngine:
     MAX_CANDIDATES = 200
+    RERANK_DOMINANCE_RATIO = 10.0
 
     def __init__(
         self,
@@ -186,7 +187,35 @@ class LocalSearchEngine:
                 key=lambda document: document.metadata["rerank_score"], reverse=True
             )
         self._promote_exact_table_header(query, candidates)
+        candidates = self._filter_dominated_candidates(candidates)
         return candidates[:top_k]
+
+    @classmethod
+    def _filter_dominated_candidates(cls, candidates: list[Document]) -> list[Document]:
+        """Remove obvious reranker noise only after a clear score separation.
+
+        Comparable scores are left untouched. Exact table-header matches survive
+        because they carry deterministic query evidence independent of the model
+        score. This avoids a fixed absolute threshold across reranker versions.
+        """
+        scored = [
+            (index, float(document.metadata["rerank_score"]))
+            for index, document in enumerate(candidates)
+            if document.metadata.get("rerank_score") is not None
+        ]
+        if len(scored) != len(candidates) or len(scored) < 2:
+            return candidates
+        ordered_scores = sorted((score for _, score in scored), reverse=True)
+        best, second = ordered_scores[:2]
+        if best <= 0 or second > best / cls.RERANK_DOMINANCE_RATIO:
+            return candidates
+        cutoff = best / cls.RERANK_DOMINANCE_RATIO
+        return [
+            document
+            for document in candidates
+            if float(document.metadata["rerank_score"]) >= cutoff
+            or document.metadata.get("header_match_score") is not None
+        ]
 
     def _matching_table_parent_keys(
         self, query: str, conditions: list[models.FieldCondition]

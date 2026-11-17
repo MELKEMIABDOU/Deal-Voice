@@ -46,6 +46,10 @@ Les appels modèles sont simulés. Les contrôles ajoutés sont les suivants :
 - **Reranking** : il s'applique aussi quand le nombre de candidats est inférieur
   ou égal à `top_k`. L'ordre est important car la génération peut omettre les
   derniers passages faute de place.
+- **Bruit après reranking** : lorsqu'un score domine le suivant d'au moins ×10,
+  les candidats sous un dixième du meilleur score sont écartés. Les scores
+  comparables et les correspondances explicites d'en-têtes de tableaux restent
+  disponibles. Le seuil est relatif et indépendant des documents métier.
 - **Portée de la réponse** : un calcul accepté sur un tableau dont la couverture
   source n'est pas vérifiée est présenté comme `partial` par l'API. Le calcul reste
   affiché et sourcé. La note de l'interface distingue bloc extrait et document
