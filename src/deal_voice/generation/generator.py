@@ -38,6 +38,16 @@ logger = logging.getLogger(__name__)
 VERIFICATION_OUTPUT_TOKENS = 192
 
 
+def estimated_prompt_tokens(text: str) -> int:
+    """Conservatively estimate tokens without loading a second model tokenizer.
+
+    Ollama context limits are token counts, not byte counts. Two UTF-8 bytes per
+    token remains deliberately cautious for French prose and JSON while avoiding
+    rejection of ordinary transcripts that fit comfortably in Qwen's context.
+    """
+    return (len(text.encode("utf-8")) + 1) // 2
+
+
 class RAGGenerator:
     """The model proposes; code validates references and performs table calculations."""
 
@@ -149,7 +159,7 @@ class RAGGenerator:
             )
             values = prompt_values(question, context, has_tables)
             rendered = SYSTEM_PROMPT.format(**values) + question
-            if len(rendered.encode("utf-8")) > budget:
+            if estimated_prompt_tokens(rendered) > budget:
                 continue
             entries.append(encoded)
             included.append(item)
@@ -396,7 +406,7 @@ class RAGGenerator:
             separators=(",", ":"),
         )
         budget = settings.ollama_num_ctx - VERIFICATION_OUTPUT_TOKENS - 256
-        if len((VERIFICATION_PROMPT + payload).encode("utf-8")) > budget:
+        if estimated_prompt_tokens(VERIFICATION_PROMPT + payload) > budget:
             return None
         raw = self.verifier.invoke(
             [("system", VERIFICATION_PROMPT), ("human", payload)]

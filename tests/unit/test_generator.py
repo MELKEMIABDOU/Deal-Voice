@@ -7,7 +7,7 @@ from langchain_core.documents import Document
 
 from deal_voice.config import settings
 from deal_voice.evidence.citations import evidence_from_documents
-from deal_voice.generation.generator import RAGGenerator
+from deal_voice.generation.generator import RAGGenerator, estimated_prompt_tokens
 from deal_voice.generation.prompts import (
     SYSTEM_PROMPT,
     prompt_values,
@@ -313,10 +313,35 @@ def test_normal_audio_parent_fits_without_truncation_or_larger_context(monkeypat
     assert generator.last_trace["omitted_evidence_count"] == 0
     payload = generator.chain.payload
     rendered = SYSTEM_PROMPT.format(**payload) + payload["question"]
-    assert len(rendered.encode("utf-8")) <= 4096 - 512 - 256
+    assert estimated_prompt_tokens(rendered) <= 4096 - 512 - 256
 
 
-def test_excluded_table_does_not_block_a_ranked_audio_parent(monkeypatch):
+def test_realistic_long_french_transcript_is_not_rejected_as_one_token_per_byte(
+    monkeypatch,
+):
+    monkeypatch.setattr(settings, "ollama_num_ctx", 4096)
+    monkeypatch.setattr(settings, "ollama_num_predict", 512)
+    content = (
+        "**SPEAKER_00**: Éric travaille pour Aquaforté. "
+        "**SPEAKER_01**: Nous échangeons sur les fontaines à eau. "
+    ) * 36
+    generator = generator_for(
+        lambda entries: claim_plan(entries, "Éric travaille pour Aquaforté.")
+    )
+    answer = generator.generate(
+        "Pour quelle société travaille Éric ?", [narrative(content)]
+    )
+    rendered = (
+        SYSTEM_PROMPT.format(**generator.chain.payload)
+        + generator.chain.payload["question"]
+    )
+    assert len(rendered.encode("utf-8")) > 4096 - 512 - 256
+    assert estimated_prompt_tokens(rendered) <= 4096 - 512 - 256
+    assert generator.last_trace["status"] == "answer"
+    assert "Aquaforté" in answer
+
+
+def test_audio_parent_and_compact_table_metadata_fit_together(monkeypatch):
     monkeypatch.setattr(settings, "ollama_num_ctx", 4096)
     monkeypatch.setattr(settings, "ollama_num_predict", 512)
     document = narrative("Un passage du contrat. " * 110)
@@ -328,10 +353,10 @@ def test_excluded_table_does_not_block_a_ranked_audio_parent(monkeypatch):
     entries = [
         json.loads(line) for line in generator.chain.payload["context"].splitlines()[1:]
     ]
-    assert len(entries) == 1
+    assert len(entries) == 2
     assert entries[0]["content"] == document.page_content
     assert generator.last_trace["status"] == "answer"
-    assert generator.last_trace["omitted_evidence_count"] == 1
+    assert generator.last_trace["omitted_evidence_count"] == 0
     assert "Contexte partiel" not in answer
 
 
@@ -519,7 +544,13 @@ def test_verification_budget_refuses_without_truncating_or_calling_the_model(
 ):
     monkeypatch.setattr(settings, "ollama_num_ctx", 4096)
     monkeypatch.setattr(settings, "ollama_num_predict", 512)
-    generator = generator_for(lambda entries: claim_plan(entries, "Un fait. " * 120))
+
+    def plan_then_reduce_available_context(entries):
+        # Model a verifier with less usable capacity after a valid planning pass.
+        monkeypatch.setattr(settings, "ollama_num_ctx", 512)
+        return claim_plan(entries, "Un fait. " * 120)
+
+    generator = generator_for(plan_then_reduce_available_context)
     answer = generator.generate("Quel est le fait ?", [narrative("Un fait. " * 220)])
     assert generator.last_trace["verification"] == "context_limit"
     assert generator.verifier.payload is None
